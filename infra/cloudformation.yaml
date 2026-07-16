@@ -1,0 +1,434 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  SentinelAI — Enterprise Runtime AI Governance Platform.
+  Deploys ECS Fargate behind an ALB, DynamoDB audit store,
+  Secrets Manager for API keys, CloudWatch logging, and full IAM.
+
+# ============================================================
+# Parameters
+# ============================================================
+Parameters:
+  ImageUri:
+    Type: String
+    Description: "ECR Docker image URI (e.g. 123456789.dkr.ecr.us-east-1.amazonaws.com/action-guard:latest)"
+
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Default: ""
+    Description: "Google Gemini API Key (stored in Secrets Manager, not passed in plaintext to container)"
+
+  ActivePolicyVersion:
+    Type: String
+    Default: "v3"
+    AllowedValues: ["v1", "v2", "v3"]
+    Description: "Default SentinelAI governance policy ruleset version"
+
+  ContainerPort:
+    Type: Number
+    Default: 8000
+
+  TaskCpu:
+    Type: String
+    Default: "1024"
+    AllowedValues: ["512", "1024", "2048", "4096"]
+
+  TaskMemory:
+    Type: String
+    Default: "2048"
+    AllowedValues: ["1024", "2048", "4096", "8192"]
+
+  DesiredCount:
+    Type: Number
+    Default: 1
+    MinValue: 1
+    MaxValue: 10
+
+# ============================================================
+# Resources
+# ============================================================
+Resources:
+
+  # -------------------------------------------------------
+  # VPC & Networking
+  # -------------------------------------------------------
+  SentinelVPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: sentinelai-vpc
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: sentinelai-igw
+
+  VpcGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref SentinelVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SentinelVPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: sentinelai-subnet-public-1
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref SentinelVPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs ""]
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: sentinelai-subnet-public-2
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref SentinelVPC
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VpcGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  Subnet1Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  Subnet2Association:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  # -------------------------------------------------------
+  # Security Groups
+  # -------------------------------------------------------
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow HTTP/HTTPS traffic to SentinelAI ALB"
+      VpcId: !Ref SentinelVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: sentinelai-alb-sg
+
+  FargateSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "Allow traffic from ALB to ECS Fargate tasks only"
+      VpcId: !Ref SentinelVPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: !Ref ContainerPort
+          ToPort: !Ref ContainerPort
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: sentinelai-ecs-sg
+
+  # -------------------------------------------------------
+  # Application Load Balancer
+  # -------------------------------------------------------
+  SentinelALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: sentinelai-alb
+      Scheme: internet-facing
+      Type: application
+      Subnets:
+        - !Ref PublicSubnet1
+        - !Ref PublicSubnet2
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+
+  SentinelTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: sentinelai-tg
+      Port: !Ref ContainerPort
+      Protocol: HTTP
+      VpcId: !Ref SentinelVPC
+      TargetType: ip
+      HealthCheckPath: /health
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Matcher:
+        HttpCode: "200"
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref SentinelALB
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref SentinelTargetGroup
+
+  # -------------------------------------------------------
+  # DynamoDB — Persistent Audit Store
+  # -------------------------------------------------------
+  AuditTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: action_guard_audit
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
+      Tags:
+        - Key: Project
+          Value: SentinelAI
+
+  # -------------------------------------------------------
+  # Secrets Manager — Gemini API Key (never in plaintext env)
+  # -------------------------------------------------------
+  GeminiApiKeySecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: sentinelai/gemini-api-key
+      Description: "Google Gemini API Key for SentinelAI Governance Platform"
+      SecretString: !Sub '{"GEMINI_API_KEY":"${GeminiApiKey}"}'
+
+  # -------------------------------------------------------
+  # CloudWatch Logs
+  # -------------------------------------------------------
+  SentinelLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /ecs/sentinelai
+      RetentionInDays: 30
+
+  # -------------------------------------------------------
+  # IAM — ECS Task Execution Role (pull image, read secrets)
+  # -------------------------------------------------------
+  ECSExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: sentinelai-ecs-execution-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: ReadGeminiSecret
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource: !Ref GeminiApiKeySecret
+
+  # -------------------------------------------------------
+  # IAM — ECS Task Role (runtime: DynamoDB + CloudWatch)
+  # -------------------------------------------------------
+  ECSTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: sentinelai-ecs-task-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: DynamoDBAuditAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:BatchWriteItem
+                Resource: !GetAtt AuditTable.Arn
+        - PolicyName: CloudWatchLogging
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt SentinelLogGroup.Arn
+
+  # -------------------------------------------------------
+  # ECS Cluster
+  # -------------------------------------------------------
+  SentinelCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: sentinelai-cluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      ClusterSettings:
+        - Name: containerInsights
+          Value: enabled
+
+  # -------------------------------------------------------
+  # ECS Task Definition
+  # -------------------------------------------------------
+  SentinelTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: sentinelai-task
+      Cpu: !Ref TaskCpu
+      Memory: !Ref TaskMemory
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      ExecutionRoleArn: !GetAtt ECSExecutionRole.Arn
+      TaskRoleArn: !GetAtt ECSTaskRole.Arn
+      ContainerDefinitions:
+        - Name: sentinelai
+          Image: !Ref ImageUri
+          PortMappings:
+            - ContainerPort: !Ref ContainerPort
+              Protocol: tcp
+          Environment:
+            - Name: USE_DYNAMODB
+              Value: "true"
+            - Name: DRY_RUN
+              Value: "false"
+            - Name: AWS_DEFAULT_REGION
+              Value: !Ref AWS::Region
+            - Name: AUDIT_TABLE
+              Value: action_guard_audit
+            - Name: ACTIVE_POLICY_VERSION
+              Value: !Ref ActivePolicyVersion
+          Secrets:
+            - Name: GEMINI_API_KEY
+              ValueFrom: !Sub "${GeminiApiKeySecret}:GEMINI_API_KEY::"
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref SentinelLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: sentinelai
+          HealthCheck:
+            Command:
+              - CMD-SHELL
+              - "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"
+            Interval: 30
+            Timeout: 5
+            Retries: 3
+            StartPeriod: 15
+          Essential: true
+
+  # -------------------------------------------------------
+  # ECS Service
+  # -------------------------------------------------------
+  SentinelService:
+    Type: AWS::ECS::Service
+    DependsOn: ALBListener
+    Properties:
+      ServiceName: sentinelai-service
+      Cluster: !Ref SentinelCluster
+      TaskDefinition: !Ref SentinelTaskDefinition
+      DesiredCount: !Ref DesiredCount
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          Subnets:
+            - !Ref PublicSubnet1
+            - !Ref PublicSubnet2
+          SecurityGroups:
+            - !Ref FargateSecurityGroup
+      LoadBalancers:
+        - ContainerName: sentinelai
+          ContainerPort: !Ref ContainerPort
+          TargetGroupArn: !Ref SentinelTargetGroup
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 50
+
+# ============================================================
+# Outputs
+# ============================================================
+Outputs:
+  ServiceUrl:
+    Description: "Public URL of the SentinelAI Governance Platform"
+    Value: !Sub "http://${SentinelALB.DNSName}"
+    Export:
+      Name: SentinelAI-ServiceURL
+
+  DashboardUrl:
+    Description: "SentinelAI Governance Dashboard"
+    Value: !Sub "http://${SentinelALB.DNSName}/"
+    Export:
+      Name: SentinelAI-DashboardURL
+
+  APIDocsUrl:
+    Description: "SentinelAI FastAPI Swagger Documentation"
+    Value: !Sub "http://${SentinelALB.DNSName}/docs"
+    Export:
+      Name: SentinelAI-APIDocsURL
+
+  AuditTableName:
+    Description: "DynamoDB Audit Table Name"
+    Value: !Ref AuditTable
+    Export:
+      Name: SentinelAI-AuditTable
+
+  ClusterName:
+    Description: "ECS Cluster Name"
+    Value: !Ref SentinelCluster
+    Export:
+      Name: SentinelAI-ClusterName

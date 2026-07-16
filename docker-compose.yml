@@ -1,0 +1,15 @@
+version: "3.9"
+
+services:
+  action-guard:
+    build: .
+    container_name: action-guard-server
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - USE_DYNAMODB=false
+      - DRY_RUN=false
+      - ACTIVE_POLICY_VERSION=v1
+    volumes:
+      - .:/app

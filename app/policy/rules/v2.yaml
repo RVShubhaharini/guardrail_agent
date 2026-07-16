@@ -1,0 +1,55 @@
+rules:
+  - id: block_bulk_delete
+    description: "Block any database delete where record count exceeds 100"
+    tool: db_delete
+    condition: "params.get('record_count', 0) > 100"
+    action: block
+    risk_score: 95
+    remediation: "Reduce the record delete count below 100, or seek admin escalation."
+
+  - id: allow_small_delete
+    description: "Log and allow deletes of 100 or fewer records"
+    tool: db_delete
+    condition: "params.get('record_count', 0) <= 100"
+    action: log_and_allow
+    risk_score: 10
+
+  - id: hitl_external_email
+    description: "Require HITL for any email sent to an external domain"
+    tool: send_email
+    condition: "(params.get('recipient_domain') or recipient_domain) not in internal_domains"
+    action: require_hitl
+    risk_score: 60
+    remediation: "Emails sent to domains outside ACME Corp require human verification."
+
+  - id: allow_internal_email
+    description: "Log and allow internal emails"
+    tool: send_email
+    condition: "(params.get('recipient_domain') or recipient_domain) in internal_domains"
+    action: log_and_allow
+    risk_score: 5
+
+  - id: log_confidential_read
+    description: "Log and allow reads of paths containing 'confidential'"
+    tool: read_file
+    condition: "'confidential' in params.get('path', '')"
+    action: log_and_allow
+    risk_score: 25
+
+  # ★ bonus: time-of-day awareness
+  - id: after_hours_write_hitl
+    description: "Require HITL for data writes outside business hours (6am-9pm)"
+    tool: db_write
+    condition: "hour_of_day < 6 or hour_of_day > 21"
+    action: require_hitl
+    risk_score: 50
+    remediation: "Database writes after hours require validation to prevent accidental modifications."
+
+  # ★ bonus: simple rate limiting
+  - id: rate_limit_any_tool
+    description: "Block if this agent has made more than 10 calls to this tool in the last 60s"
+    tool: "*"
+    condition: "calls_last_minute > 10"
+    action: block
+    risk_score: 85
+    remediation: "Rate limit exceeded. Try again after 60 seconds."

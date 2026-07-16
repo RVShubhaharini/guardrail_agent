@@ -1,0 +1,1636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SentinelAI — Enterprise AI Governance & Control Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #060813;
+      --bg-surface: rgba(13, 17, 34, 0.85);
+      --bg-surface-hover: rgba(22, 28, 51, 0.9);
+      --border-glow: rgba(43, 58, 97, 0.4);
+      
+      --color-allowed: #10B981;
+      --color-allowed-glow: rgba(16, 185, 129, 0.2);
+      
+      --color-pending: #F59E0B;
+      --color-pending-glow: rgba(245, 158, 11, 0.2);
+      
+      --color-blocked: #EF4444;
+      --color-blocked-glow: rgba(239, 68, 68, 0.2);
+      
+      --text-primary: #F1F5F9;
+      --text-secondary: #94A3B8;
+      --text-muted: #475569;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+    }
+
+    .radial-glow-1 {
+      position: absolute;
+      top: -10%;
+      left: -10%;
+      width: 50%;
+      height: 50%;
+      background: radial-gradient(circle, rgba(99, 102, 241, 0.15) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .radial-glow-2 {
+      position: absolute;
+      bottom: -10%;
+      right: -10%;
+      width: 50%;
+      height: 50%;
+      background: radial-gradient(circle, rgba(239, 68, 68, 0.08) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    header {
+      backdrop-filter: blur(12px);
+      background: rgba(6, 8, 19, 0.85);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 16px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-badge {
+      background: linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%);
+      box-shadow: 0 0 15px rgba(6, 182, 212, 0.4);
+      width: 34px;
+      height: 34px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: 18px;
+      color: white;
+    }
+
+    .logo-title {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(to right, #FFFFFF, #38BDF8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .active-policy-status {
+      background: rgba(15, 23, 42, 0.8);
+      border: 1px solid var(--border-glow);
+      border-radius: 20px;
+      padding: 6px 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--color-allowed);
+      box-shadow: 0 0 8px var(--color-allowed);
+    }
+
+    .main-container {
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+      z-index: 1;
+      position: relative;
+    }
+
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .stat-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-glow);
+      border-radius: 14px;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      backdrop-filter: blur(16px);
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .stat-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(56, 189, 248, 0.4);
+    }
+
+    .stat-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .stat-value {
+      font-size: 26px;
+      font-weight: 800;
+      color: white;
+    }
+
+    .stat-footer {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .grid-2col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 1100px) {
+      .grid-2col {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card-panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-glow);
+      border-radius: 16px;
+      backdrop-filter: blur(16px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-content {
+      padding: 20px;
+    }
+
+    .version-selector-group {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+
+    .btn-version {
+      background: rgba(30, 41, 59, 0.3);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      color: var(--text-secondary);
+      padding: 6px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+      transition: all 0.2s ease;
+    }
+
+    .btn-version:hover {
+      background: rgba(30, 41, 59, 0.6);
+      color: white;
+    }
+
+    .btn-version.active {
+      background: linear-gradient(135deg, rgba(6, 182, 212, 0.2) 0%, rgba(79, 70, 229, 0.2) 100%);
+      border-color: #06B6D4;
+      color: white;
+      box-shadow: 0 0 10px rgba(6, 182, 212, 0.2);
+    }
+
+    .form-group {
+      margin-bottom: 14px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .form-input, .form-select, .form-textarea {
+      width: 100%;
+      background: rgba(6, 8, 19, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: white;
+      font-family: inherit;
+      font-size: 13px;
+      transition: border-color 0.2s ease;
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+      outline: none;
+      border-color: #06B6D4;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%);
+      color: white;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 13px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.4);
+      opacity: 0.95;
+    }
+
+    .timeline-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      padding-left: 18px;
+    }
+
+    .timeline-container::before {
+      content: '';
+      position: absolute;
+      left: 5px;
+      top: 8px;
+      bottom: 8px;
+      width: 2px;
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .timeline-node {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .timeline-node::before {
+      content: '';
+      position: absolute;
+      left: -17px;
+      top: 4px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      border: 2px solid var(--bg-base);
+    }
+
+    .timeline-node.active::before { background: #6366F1; box-shadow: 0 0 8px #6366F1; }
+    .timeline-node.blocked::before { background: var(--color-blocked); box-shadow: 0 0 8px var(--color-blocked); }
+    .timeline-node.allowed::before { background: var(--color-allowed); box-shadow: 0 0 8px var(--color-allowed); }
+    .timeline-node.pending::before { background: var(--color-pending); box-shadow: 0 0 8px var(--color-pending); }
+
+    .timeline-step {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-secondary);
+    }
+
+    .timeline-details {
+      font-size: 12px;
+      color: var(--text-primary);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+      padding: 10px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      text-align: left;
+    }
+
+    td {
+      font-size: 13px;
+      padding: 12px 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      color: var(--text-primary);
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.01);
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .badge-allowed { background: rgba(16, 185, 129, 0.1); color: var(--color-allowed); border: 1px solid rgba(16, 185, 129, 0.2); }
+    .badge-blocked { background: rgba(239, 68, 68, 0.1); color: var(--color-blocked); border: 1px solid rgba(239, 68, 68, 0.2); }
+    .badge-pending { background: rgba(245, 158, 11, 0.1); color: var(--color-pending); border: 1px solid rgba(245, 158, 11, 0.2); }
+    
+    .badge-label {
+      background: rgba(56, 189, 248, 0.1);
+      color: #38BDF8;
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      margin-right: 4px;
+    }
+
+    .badge-label-critical {
+      background: rgba(244, 63, 94, 0.1);
+      color: #F43F5E;
+      border: 1px solid rgba(244, 63, 94, 0.2);
+      margin-right: 4px;
+    }
+
+    .hitl-queue {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .hitl-card {
+      background: rgba(245, 158, 11, 0.01);
+      border: 1px solid rgba(245, 158, 11, 0.15);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .hitl-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .hitl-actions {
+      display: flex;
+      gap: 8px;
+      align-self: flex-end;
+    }
+
+    .btn-approve, .btn-reject, .btn-action {
+      border: none;
+      padding: 5px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-approve { background: var(--color-allowed); color: white; }
+    .btn-reject { background: var(--color-blocked); color: white; }
+    .btn-action { background: rgba(255, 255, 255, 0.08); color: white; border: 1px solid rgba(255, 255, 255, 0.1); }
+    .btn-action:hover { background: rgba(255, 255, 255, 0.15); }
+    .btn-approve:hover, .btn-reject:hover { opacity: 0.9; }
+
+    pre {
+      background: rgba(6, 8, 19, 0.9);
+      padding: 10px;
+      border-radius: 6px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      overflow-x: auto;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .tabs-header {
+      display: flex;
+      gap: 16px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 0 40px;
+      margin-top: -8px;
+      background: rgba(6, 8, 19, 0.4);
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 14px 0;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      transition: all 0.2s ease;
+    }
+
+    .tab-btn:hover { color: white; }
+    .tab-btn.active { color: #38BDF8; border-bottom-color: #38BDF8; }
+
+    .tab-pane { display: none; }
+    .tab-pane.active { display: flex; flex-direction: column; gap: 24px; }
+
+    .explanation-box {
+      border-radius: 10px;
+      padding: 14px;
+      margin-top: 12px;
+    }
+    .explanation-box.blocked { background: rgba(239, 68, 68, 0.03); border: 1px solid rgba(239, 68, 68, 0.12); }
+    .explanation-box.allowed { background: rgba(16, 185, 129, 0.03); border: 1px solid rgba(16, 185, 129, 0.12); }
+    .explanation-box.pending { background: rgba(245, 158, 11, 0.03); border: 1px solid rgba(245, 158, 11, 0.12); }
+
+    .explanation-title { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+    .remediation-msg { font-size: 12px; margin-top: 6px; padding-top: 6px; border-top: 1px dashed rgba(255, 255, 255, 0.06); color: var(--text-secondary); }
+
+    .risk-meter-container { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+    .risk-bar { flex-grow: 1; height: 5px; background: rgba(255, 255, 255, 0.04); border-radius: 3px; overflow: hidden; position: relative; }
+    .risk-fill { height: 100%; width: 0%; border-radius: 3px; transition: width 0.4s ease; }
+
+    /* Simulated Inbox Styles */
+    .inbox-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .inbox-item {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 10px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: border-color 0.2s;
+    }
+    .inbox-item:hover {
+      border-color: rgba(56, 189, 248, 0.25);
+    }
+    .inbox-meta {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-secondary);
+    }
+    .inbox-subject {
+      font-size: 13px;
+      font-weight: 700;
+      color: white;
+    }
+    .inbox-body {
+      font-size: 12px;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+    .inbox-labels {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+    }
+    .inbox-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 4px;
+      border-top: 1px solid rgba(255, 255, 255, 0.03);
+      padding-top: 8px;
+    }
+
+    .preset-prompt-btn {
+      background: rgba(56, 189, 248, 0.06);
+      border: 1px solid rgba(56, 189, 248, 0.15);
+      color: #38BDF8;
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 11px;
+      cursor: pointer;
+      text-align: left;
+      transition: all 0.2s;
+    }
+    .preset-prompt-btn:hover {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: #38BDF8;
+    }
+
+    /* Chat UI Styles */
+    .chat-container {
+      display: flex;
+      flex-direction: column;
+      height: 600px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-glow);
+      border-radius: 14px;
+      backdrop-filter: blur(16px);
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .chat-header-bar {
+      padding: 12px 20px;
+      background: rgba(13, 17, 34, 0.9);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .chat-log {
+      flex-grow: 1;
+      padding: 20px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .chat-message {
+      display: flex;
+      flex-direction: column;
+      max-width: 85%;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 13px;
+      line-height: 1.4;
+      animation: msgFadeIn 0.25s ease-out;
+    }
+    @keyframes msgFadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .chat-message.user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, #4F46E5 0%, #3B82F6 100%);
+      color: white;
+      border-bottom-right-radius: 2px;
+      box-shadow: 0 4px 15px rgba(59, 130, 246, 0.25);
+    }
+    .chat-message.agent {
+      align-self: flex-start;
+      background: rgba(255, 255, 255, 0.025);
+      color: var(--text-primary);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+      border-bottom-left-radius: 2px;
+    }
+    .chat-message-meta {
+      font-size: 10px;
+      color: var(--text-secondary);
+      margin-bottom: 6px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .chat-input-container {
+      display: flex;
+      padding: 12px 16px;
+      background: rgba(6, 8, 19, 0.6);
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      gap: 10px;
+      align-items: center;
+    }
+    .chat-input {
+      flex-grow: 1;
+      background: rgba(255,255,255,0.03);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 8px;
+      color: white;
+      padding: 10px 14px;
+      font-size: 13px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .chat-input:focus {
+      border-color: #38BDF8;
+    }
+    .chat-warn-banner {
+      background: rgba(239, 68, 68, 0.08);
+      border-bottom: 1px solid rgba(239, 68, 68, 0.15);
+      color: #EF4444;
+      padding: 8px 20px;
+      font-size: 11px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .chat-info-banner {
+      background: rgba(245, 158, 11, 0.05);
+      border-bottom: 1px solid rgba(245, 158, 11, 0.12);
+      color: #F59E0B;
+      padding: 8px 20px;
+      font-size: 11px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+  </style>
+</head>
+<body>
+  <div class="radial-glow-1"></div>
+  <div class="radial-glow-2"></div>
+
+  <header>
+    <div class="logo-container">
+      <div class="logo-badge">🛰</div>
+      <div>
+        <h1 class="logo-title">SentinelAI</h1>
+        <div style="font-size: 9px; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">Enterprise AI Runtime Governance</div>
+      </div>
+    </div>
+    
+    <div style="display: flex; align-items: center; gap: 14px;">
+      <div class="active-policy-status" style="border-color: rgba(56, 189, 248, 0.3);">
+        <span class="status-dot"></span>
+        <span>Governance Policy: <strong id="active-policy-label">v1</strong></span>
+      </div>
+      <div class="active-policy-status" id="connector-status-badge">
+        <span>Gmail Mode: <strong id="connector-mode-label">MOCK</strong></span>
+        <button id="auth-btn" style="padding: 2px 8px; font-size: 11px; margin-left: 8px; border-radius: 4px; border: 1px solid rgba(56, 189, 248, 0.3); background: rgba(56, 189, 248, 0.1); color: #38BDF8; cursor: pointer; transition: all 0.2s;" onclick="handleAuthClick()">Connect</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="tabs-header">
+    <button class="tab-btn active" onclick="switchTab('dashboard')">Governance Center</button>
+    <button class="tab-btn" onclick="switchTab('playground')">Agent Simulator</button>
+    <button class="tab-btn" onclick="switchTab('audits')">Audit Logs Directory</button>
+  </div>
+
+  <div class="main-container">
+    
+    <!-- DASHBOARD CENTER -->
+    <div id="tab-dashboard" class="tab-pane active">
+      <!-- Stats Grid -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Actions Evaluated</div>
+          <div class="stat-value" id="stat-total">0</div>
+          <div class="stat-footer">Gateway dispatches tracked</div>
+        </div>
+        <div class="stat-card" style="border-left: 2px solid var(--color-allowed);">
+          <div class="stat-label">Allowed Rate</div>
+          <div class="stat-value" id="stat-allowed">0%</div>
+          <div class="stat-footer">Executing without overrides</div>
+        </div>
+        <div class="stat-card" style="border-left: 2px solid var(--color-pending);">
+          <div class="stat-label">Paused (HITL Queue)</div>
+          <div class="stat-value" id="stat-pending">0</div>
+          <div class="stat-footer">Awaiting operator authorization</div>
+        </div>
+        <div class="stat-card" style="border-left: 2px solid var(--color-blocked);">
+          <div class="stat-label">Blocked Rate</div>
+          <div class="stat-value" id="stat-blocked">0%</div>
+          <div class="stat-footer">Blocked by runtime policy</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Average Risk Score</div>
+          <div class="stat-value" id="stat-risk">0</div>
+          <div class="stat-footer">Aggregated operational risk</div>
+        </div>
+      </div>
+
+      <!-- Core Work Grid -->
+      <div class="grid-2col" style="grid-template-columns: 1.1fr 0.9fr;">
+        
+        <!-- Left: Live Simulated Inbox -->
+        <div class="card-panel">
+          <div class="card-header">
+            <h2 class="card-title">📬 Simulated Gmail Inbox Visualizer</h2>
+            
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Operator Role:</span>
+              <select class="form-select" id="inbox-role-select" style="padding: 2px 8px; font-size: 11px; width: 110px;" onchange="refreshInbox()">
+                <option value="admin">Admin</option>
+                <option value="developer">Developer</option>
+                <option value="junior_dev" selected>Junior Dev</option>
+                <option value="guest">Guest / Intern</option>
+              </select>
+              <button class="btn-action" style="padding: 2px 8px; font-size: 11px;" onclick="refreshInbox()">Refresh</button>
+            </div>
+          </div>
+          <div class="card-content" style="max-height: 520px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
+            <div class="inbox-list" id="inbox-list-container">
+              <!-- Dynamically populated inbox -->
+              <div style="text-align: center; color: var(--text-muted); padding: 40px;">Loading simulated mail inbox...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Side: HITL Approvals & Decisions Feed -->
+        <div style="display: flex; flex-direction: column; gap: 24px;">
+          <!-- HITL Approvals -->
+          <div class="card-panel">
+            <div class="card-header">
+              <h2 class="card-title">🚨 Human-in-the-Loop review queue</h2>
+              <span class="badge badge-pending" id="hitl-queue-count">0 Awaiting</span>
+            </div>
+            <div class="card-content" style="max-height: 250px; overflow-y: auto;">
+              <div class="hitl-queue" id="hitl-list">
+                <div style="color: var(--text-muted); text-align: center; padding: 20px;">No pending actions requiring authorization.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recent Decisions Feed -->
+          <div class="card-panel">
+            <div class="card-header">
+              <h2 class="card-title">📜 Real-time Decision Feed</h2>
+            </div>
+            <div class="card-content" style="max-height: 250px; overflow-y: auto; padding: 0;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Agent / User</th>
+                    <th>Tool Invocated</th>
+                    <th>Outcome</th>
+                    <th>Risk</th>
+                  </tr>
+                </thead>
+                <tbody id="recent-feed-body">
+                  <tr>
+                    <td colspan="4" style="color: var(--text-muted); text-align: center;">Waiting for action dispatches...</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <!-- Connector Status Widget -->
+          <div class="card-panel" id="connector-status-panel">
+            <div class="card-header">
+              <h2 class="card-title">🔌 Connector Registry</h2>
+              <span style="font-size: 11px; color: var(--text-secondary);">Same engine. Any target.</span>
+            </div>
+            <div class="card-content" style="display: flex; flex-direction: column; gap: 8px;" id="connector-list">
+              <div style="color: var(--text-muted); font-size: 12px;">Loading connectors...</div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- AGENT PLAYGROUND -->
+    <div id="tab-playground" class="tab-pane">
+      <div class="grid-2col">
+        
+        <!-- Left: Playground Inputs -->
+        <div class="card-panel">
+          <div class="card-header">
+            <h2 class="card-title">🤖 SentinelAI Agent Simulator</h2>
+          </div>
+          <div class="card-content" style="display: flex; flex-direction: column; gap: 16px;">
+            <p style="font-size: 12px; color: var(--text-secondary);">
+              Run natural language instructions through Gemini-2.5-flash. SentinelAI intercepts proposed actions and enforces authorization before routing them to the Execution Gateway.
+            </p>
+
+            <div class="form-group">
+              <label class="form-label">Select Evaluation Ruleset</label>
+              <div class="version-selector-group" id="playground-policy-switcher">
+                <button class="btn-version active" onclick="setPlaygroundPolicy('v1')">v1 Rules</button>
+                <button class="btn-version" onclick="setPlaygroundPolicy('v2')">v2 (Time + Rate)</button>
+                <button class="btn-version" onclick="setPlaygroundPolicy('v3')">v3 (Advanced Layers)</button>
+                <button class="btn-version" onclick="setPlaygroundPolicy('finance')">Finance Template</button>
+                <button class="btn-version" onclick="setPlaygroundPolicy('healthcare')">Healthcare Template</button>
+                <button class="btn-version" onclick="setPlaygroundPolicy('retail')">Retail Template</button>
+              </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div class="form-group">
+                <label class="form-label" for="play-agent">Agent / Session ID</label>
+                <input class="form-input" type="text" id="play-agent" value="sentinel-agent-01" oninput="verifyPlaygroundSession()">
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="play-role">Operator Role Context</label>
+                <select class="form-select" id="play-role" onchange="verifyPlaygroundSession()">
+                  <option value="admin">Administrator</option>
+                  <option value="developer">Developer</option>
+                  <option value="junior_dev" selected>Junior Developer</option>
+                  <option value="guest">Guest / Intern</option>
+                  <option value="anonymous">Anonymous / Guest</option>
+                </select>
+              </div>
+            </div>
+            
+            <div style="display: flex; align-items: center; gap: 8px; margin-top: 12px; margin-bottom: 12px; padding: 10px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+              <input type="checkbox" id="play-dry-run" style="width: 16px; height: 16px; cursor: pointer;">
+              <label for="play-dry-run" style="font-size: 12px; font-weight: 600; cursor: pointer; color: var(--text-primary); display: flex; align-items: center; gap: 4px; margin-bottom: 0;">
+                ⚙️ Enable Dry Run Mode <span style="font-size: 10px; font-weight: 400; color: var(--text-secondary);">(Evaluate policies but never execute tools)</span>
+              </label>
+            </div>
+
+            <!-- Natural Language Presets -->
+            <div class="form-group">
+              <label class="form-label">Preset Attack / Operations Prompts</label>
+              <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 4px;">
+                <button class="preset-prompt-btn" onclick="applyPresetPrompt('Delete 500 records from the database')">
+                  🔴 <strong>Bulk Delete (PS-3.1)</strong>: "Delete 500 records from the database" (Blocked by policy)
+                </button>
+                <button class="preset-prompt-btn" onclick="applyPresetPrompt('Delete 5 records from the database')">
+                  🟢 <strong>Small Delete (PS-3.1)</strong>: "Delete 5 records from the database" (Allowed by policy)
+                </button>
+                <button class="preset-prompt-btn" onclick="applyPresetPrompt('Send email to external@gmail.com with subject Urgent Account Access')">
+                  🟡 <strong>External Email (PS-3.1)</strong>: "Send email to external@gmail.com" (HITL Approval Required)
+                </button>
+                <button class="preset-prompt-btn" onclick="applyPresetPrompt('Read path /system/confidential_keys.txt')">
+                  🔵 <strong>Confidential Read (PS-3.1)</strong>: "Read path /system/confidential_keys.txt" (Logged & Allowed)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Governance Chat Room Interface -->
+        <div class="chat-container">
+          <div class="chat-header-bar">
+            <h2 class="card-title" style="margin-bottom: 0;">💬 SentinelAI Governance Chatroom</h2>
+            <button class="btn-action" style="padding: 4px 10px; font-size: 11px;" onclick="clearPlaygroundChat()">Clear Chat</button>
+          </div>
+          
+          <!-- Verification Warning / Info Banners -->
+          <div id="chat-alert-banner" class="chat-warn-banner" style="display: none;"></div>
+          <div id="chat-info-banner" class="chat-info-banner" style="display: none;"></div>
+          
+          <div class="chat-log" id="chat-log-box">
+            <div class="chat-message agent">
+              <div class="chat-message-meta">SentinelAI Guardrail Agent</div>
+              Hello! I am your AI assistant running with SentinelAI governance. Try asking me to list, send, or archive emails. I will verify your role context and policies before executing any action.
+            </div>
+          </div>
+          
+          <div class="chat-input-container">
+            <input type="text" class="chat-input" id="chat-user-input" placeholder="Type a message or instruction..." onkeypress="handleChatKeyPress(event)">
+            <button class="btn-primary" style="padding: 8px 16px; border-radius: 8px;" onclick="sendChatMessage()">Send</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+
+    <!-- AUDITS MANAGER -->
+    <div id="tab-audits" class="tab-pane">
+      <div class="card-panel">
+        <div class="card-header">
+          <h2 class="card-title">🔍 Central Searchable Audit Directory</h2>
+        </div>
+        <div class="card-content" style="display: flex; flex-direction: column; gap: 20px;">
+          <!-- Filter Inputs -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)) 100px; gap: 12px; align-items: flex-end;">
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="filter-agent">Agent / Session ID</label>
+              <input class="form-input" type="text" id="filter-agent" placeholder="Search Session...">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="filter-tool">Tool Called</label>
+              <input class="form-input" type="text" id="filter-tool" placeholder="gmail_send_email, read_file...">
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="filter-action">Action Decision</label>
+              <select class="form-select" id="filter-action">
+                <option value="">All Decisions</option>
+                <option value="allowed">Allowed</option>
+                <option value="blocked">Blocked</option>
+                <option value="require_hitl">Pending HITL</option>
+                <option value="hitl_approved">HITL Approved</option>
+                <option value="hitl_rejected">HITL Rejected</option>
+                <option value="executed">Executed</option>
+              </select>
+            </div>
+            <div class="form-group" style="margin-bottom: 0;">
+              <label class="form-label" for="filter-policy">Policy Version</label>
+              <input class="form-input" type="text" id="filter-policy" placeholder="v1, v2, v3...">
+            </div>
+            <button class="btn-primary" style="padding: 8px 16px;" onclick="searchAuditLogs()">Search</button>
+          </div>
+
+          <!-- Table Results -->
+          <div style="overflow-x: auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Timestamp</th>
+                  <th>Agent ID</th>
+                  <th>Tool Requested</th>
+                  <th>Action Result</th>
+                  <th>Rule ID</th>
+                  <th>Risk Score</th>
+                  <th>Policy Version</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody id="audit-table-body">
+                <tr>
+                  <td colspan="8" style="color: var(--text-muted); text-align: center;">Execute a query search to populate directory logs.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // Tab controller
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(pane => pane.classList.remove('active'));
+      
+      const targetBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.innerText.toLowerCase().includes(tabId));
+      if (targetBtn) targetBtn.classList.add('active');
+      
+      const pane = document.getElementById(`tab-${tabId}`);
+      if (pane) pane.classList.add('active');
+
+      if (tabId === 'dashboard') {
+        refreshDashboardData();
+      } else if (tabId === 'audits') {
+        searchAuditLogs();
+      } else if (tabId === 'playground') {
+        verifyPlaygroundSession();
+      }
+    }
+
+    // Active Policy state
+    let activePlaygroundPolicy = "v1";
+
+    function setPlaygroundPolicy(ver) {
+      activePlaygroundPolicy = ver;
+      const container = document.getElementById('playground-policy-switcher');
+      container.querySelectorAll('button').forEach(btn => {
+        if (btn.innerText.toLowerCase().includes(ver.toLowerCase())) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      });
+      
+      // Update policy on the server dynamically
+      fetch(`/policy/version?version=${ver}`, { method: 'POST' });
+    }
+
+    function applyPresetPrompt(text) {
+      document.getElementById('chat-user-input').value = text;
+      // Auto configure policy v3 for advanced cases
+      if (text.includes("confidential") || text.includes("Delete") || text.includes("hacker")) {
+        setPlaygroundPolicy("v3");
+      }
+    }
+
+    // Initialize preset
+    applyPresetPrompt('Send roadmap review email to recipient@acme-corp.com');
+
+    // Live Inbox actions
+    async function refreshInbox() {
+      try {
+        const res = await fetch('/gmail/inbox?label=INBOX');
+        const emails = await res.json();
+        
+        const container = document.getElementById('inbox-list-container');
+        if (emails.length === 0) {
+          container.innerHTML = `<div style="text-align: center; color: var(--text-muted); padding: 40px;">Gmail database is empty.</div>`;
+          return;
+        }
+
+        const role = document.getElementById('inbox-role-select').value;
+
+        container.innerHTML = emails.map(email => {
+          // Label badges
+          const labelsHtml = email.labels.map(l => {
+            const cls = (l === 'URGENT' || l === 'SPAM') ? 'badge-label-critical' : 'badge-label';
+            return `<span class="badge ${cls}">${l}</span>`;
+          }).join('');
+
+          // Action buttons based on labels
+          let actionButtons = '';
+          if (email.labels.includes('INBOX')) {
+            actionButtons += `<button class="btn-action" onclick="dispatchInboxAction('gmail_archive_email', '${email.id}')">Archive</button>`;
+            actionButtons += `<button class="btn-action" style="color:var(--color-blocked);" onclick="dispatchInboxAction('gmail_delete_email', '${email.id}')">Delete</button>`;
+          } else if (email.labels.includes('TRASH') || email.labels.includes('ARCHIVE')) {
+            actionButtons += `<button class="btn-action" style="color:var(--color-allowed);" onclick="dispatchInboxAction('gmail_restore_email', '${email.id}')">Restore</button>`;
+          }
+
+          const hasAttachments = email.attachments && email.attachments.length > 0;
+          const attachHtml = hasAttachments 
+            ? `<div style="font-size:11px; margin-top: 4px; color:#38BDF8;">📎 Attachment: <strong>${email.attachments[0].filename}</strong></div>`
+            : '';
+
+          return `
+            <div class="inbox-item">
+              <div class="inbox-meta">
+                <span>From: <strong>${email.from}</strong></span>
+                <span>${email.timestamp.replace('T', ' ').substring(0, 19)}</span>
+              </div>
+              <div class="inbox-subject">${email.subject}</div>
+              <div class="inbox-body">${email.body}</div>
+              ${attachHtml}
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+                <div class="inbox-labels">${labelsHtml}</div>
+                <div class="inbox-actions">${actionButtons}</div>
+              </div>
+            </div>
+          `;
+        }).join('');
+
+      } catch (err) {
+        console.error("Inbox refresh error: ", err);
+      }
+    }
+
+    // Run direct governed action from simulated inbox
+    async function dispatchInboxAction(toolName, msgId) {
+      const role = document.getElementById('inbox-role-select').value;
+      
+      try {
+        const res = await fetch(`/gmail/action?tool=${toolName}&role=${role}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message_id: msgId })
+        });
+        
+        const data = await res.json();
+        
+        if (data.status === "executed") {
+          refreshInbox();
+          refreshDashboardData();
+        } else {
+          // Blocked or Paused for HITL
+          const evalMsg = data.evaluation;
+          alert(`ACTION ${data.status.toUpperCase()} by SentinelAI!\n\nReason: ${evalMsg.reason}\nRisk Score: ${evalMsg.risk_score}/100\nRemediation: ${evalMsg.explanation.suggested_remediation}`);
+          refreshDashboardData();
+        }
+      } catch (err) {
+        alert("Error dispatching action: " + err);
+      }
+    }
+
+    // Refresh metrics grid & feeds
+    async function refreshDashboardData() {
+      try {
+        const auditRes = await fetch('/audit/recent?limit=30');
+        const audits = await auditRes.json();
+        const pendingRes = await fetch('/hitl/pending');
+        const pending = await pendingRes.json();
+        const healthRes = await fetch('/health');
+        const health = await healthRes.json();
+
+        // Update tags
+        document.getElementById('active-policy-label').innerText = health.policy_version;
+        document.getElementById('connector-mode-label').innerText = health.gmail_mode;
+        
+        const badge = document.getElementById('connector-status-badge');
+        const authBtn = document.getElementById('auth-btn');
+        if (health.gmail_mode === "LIVE") {
+          badge.style.borderColor = "var(--color-allowed)";
+          gmailIsLive = true;
+          authBtn.innerText = "Disconnect";
+          authBtn.style.color = "var(--color-blocked)";
+          authBtn.style.background = "rgba(239, 68, 68, 0.1)";
+          authBtn.style.borderColor = "rgba(239, 68, 68, 0.3)";
+        } else {
+          badge.style.borderColor = "var(--border-glow)";
+          gmailIsLive = false;
+          authBtn.innerText = "Connect";
+          authBtn.style.color = "#38BDF8";
+          authBtn.style.background = "rgba(56, 189, 248, 0.1)";
+          authBtn.style.borderColor = "rgba(56, 189, 248, 0.3)";
+        }
+
+        // Metrics counters
+        const total = audits.length;
+        const blockedCount = audits.filter(a => a.action === 'block' || a.action === 'hitl_rejected').length;
+        const allowedCount = audits.filter(a => a.action === 'allowed' || a.action === 'log_and_allow' || a.action === 'hitl_approved' || a.action === 'executed').length;
+        const pendingCount = pending.length;
+        
+        document.getElementById('stat-total').innerText = total;
+        document.getElementById('stat-allowed').innerText = total > 0 ? `${Math.round((allowedCount / total) * 100)}%` : '0%';
+        document.getElementById('stat-blocked').innerText = total > 0 ? `${Math.round((blockedCount / total) * 100)}%` : '0%';
+        document.getElementById('stat-pending').innerText = pendingCount;
+        document.getElementById('hitl-queue-count').innerText = `${pendingCount} Awaiting`;
+
+        const avgRisk = total > 0 ? Math.round(audits.reduce((acc, a) => acc + (a.risk_score || 0), 0) / total) : 0;
+        document.getElementById('stat-risk').innerText = avgRisk;
+
+        // Render HITL queue
+        const hitlContainer = document.getElementById('hitl-list');
+        if (pending.length === 0) {
+          hitlContainer.innerHTML = `<div style="color: var(--text-muted); text-align: center; padding: 20px;">No pending actions requiring authorization.</div>`;
+        } else {
+          hitlContainer.innerHTML = pending.map(item => `
+            <div class="hitl-card">
+              <div class="hitl-meta">
+                <div style="font-weight: 700; font-size: 13px; color: #FBBF24;">⚡ Paused: ${item.tool}</div>
+                <div class="badge badge-pending">Risk: ${item.risk_score}</div>
+              </div>
+              <div style="font-size: 12px; color: var(--text-secondary);">
+                <strong>Session:</strong> ${item.agent_id} | <strong>Policy:</strong> ${item.policy_version}
+              </div>
+              <div style="font-size: 12px; color: #EF4444; font-weight: 500;">
+                <strong>Reason:</strong> ${item.reason}
+              </div>
+              <pre>${JSON.stringify(item.params, null, 2)}</pre>
+              <div class="hitl-actions">
+                <button class="btn-approve" onclick="resolveHITL('${item.request_id}', 'approve')">Approve Action</button>
+                <button class="btn-reject" onclick="resolveHITL('${item.request_id}', 'reject')">Reject Action</button>
+              </div>
+            </div>
+          `).join('');
+        }
+
+        // Render Recent Decisions Feed
+        const tbody = document.getElementById('recent-feed-body');
+        if (audits.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="4" style="color: var(--text-muted); text-align: center;">Waiting for action dispatches...</td></tr>`;
+        } else {
+          tbody.innerHTML = audits.map(a => {
+            let badgeClass = "badge-allowed";
+            if (a.action === "block" || a.action === "hitl_rejected") badgeClass = "badge-blocked";
+            if (a.action === "require_hitl" || a.action === "pending") badgeClass = "badge-pending";
+
+            return `
+              <tr>
+                <td><strong>${a.agent_id || "dashboard"}</strong></td>
+                <td><code style="font-family:'JetBrains Mono'; font-size:11px;">${a.tool}</code></td>
+                <td><span class="badge ${badgeClass}">${a.action}</span></td>
+                <td><strong>${a.risk_score || 0}</strong></td>
+              </tr>
+            `;
+          }).join('');
+        }
+
+      } catch (err) {
+        console.error("Dashboard refresh error: ", err);
+      }
+    }
+
+    async function resolveHITL(id, decision) {
+      try {
+        const res = await fetch(`/hitl/${id}/${decision}`, { method: 'POST' });
+        if (res.ok) {
+          refreshInbox();
+          refreshDashboardData();
+        } else {
+          alert("Resolution failed.");
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    // Message Queue and UI Renderers for Playground Chat Room
+    async function sendChatMessage() {
+      const input = document.getElementById('chat-user-input');
+      const text = input.value.trim();
+      if (!text) return;
+      
+      const agentId = document.getElementById('play-agent').value.trim();
+      const role = document.getElementById('play-role').value;
+      
+      // Clear input field
+      input.value = '';
+      
+      // 1. Enforce Verification warning before sending
+      if (!agentId || role === 'anonymous') {
+        appendMessage('agent', `🚫 <strong>Security Policy Block:</strong> Session is unauthenticated. Please configure a valid Agent ID and select a verified role context to authorize operations.`, 'SentinelAI System Alert');
+        return;
+      }
+      
+      // Append User message to Chat Log
+      appendMessage('user', text, 'Operator');
+      
+      // Append Typing indicator
+      const typingIndicator = appendMessage('agent', '<span style="color:var(--text-secondary);">interpreting and planning dispatches...</span>', 'SentinelAI Guardrail Agent');
+      
+      const dryRun = document.getElementById('play-dry-run').checked;
+      
+      try {
+        const url = `/agent/run?agent_id=${encodeURIComponent(agentId)}&instruction=${encodeURIComponent(text)}&role=${role}&dry_run=${dryRun}`;
+        const res = await fetch(url, { method: 'POST' });
+        const data = await res.json();
+        
+        // Remove typing indicator
+        typingIndicator.remove();
+        
+        if (data.length === 0) {
+          appendMessage('agent', 'No actions triggered by the prompt.', 'SentinelAI Guardrail Agent');
+          return;
+        }
+        
+        for (const action of data) {
+          if (action.outcome === "TEXT_RESPONSE") {
+            appendMessage('agent', action.text, 'SentinelAI Guardrail Agent');
+          } else {
+            // Render Governance Card inside the Chat message!
+            renderGovernanceCard(action);
+          }
+        }
+        
+        // Refresh feeds
+        refreshInbox();
+        refreshDashboardData();
+        
+      } catch (err) {
+        typingIndicator.remove();
+        appendMessage('agent', `Error running task: ${err}`, 'SentinelAI Guardrail Agent');
+      }
+    }
+    
+    function appendMessage(sender, text, name) {
+      const chatLog = document.getElementById('chat-log-box');
+      const div = document.createElement('div');
+      div.className = `chat-message ${sender}`;
+      div.innerHTML = `
+        <div class="chat-message-meta">${name}</div>
+        <div>${text}</div>
+      `;
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+      return div;
+    }
+    
+    function handleChatKeyPress(event) {
+      if (event.key === 'Enter') {
+        sendChatMessage();
+      }
+    }
+    
+    async function clearPlaygroundChat() {
+      const agentId = document.getElementById('play-agent').value;
+      await fetch(`/agent/clear?agent_id=${encodeURIComponent(agentId)}`, { method: 'POST' });
+      
+      const chatLog = document.getElementById('chat-log-box');
+      chatLog.innerHTML = `
+        <div class="chat-message agent">
+          <div class="chat-message-meta">SentinelAI Guardrail Agent</div>
+          Conversation history reset. Hello! I am your AI assistant running with SentinelAI governance. Try asking me to list, send, or archive emails.
+        </div>
+      `;
+    }
+    
+    function renderGovernanceCard(action) {
+      const chatLog = document.getElementById('chat-log-box');
+      const div = document.createElement('div');
+      div.className = 'chat-message agent';
+      div.style.borderLeft = '3px solid';
+      
+      let riskColor = "var(--color-allowed)";
+      let decisionClass = "allowed";
+      let outcomeText = action.outcome;
+      
+      if (action.outcome === "BLOCKED") {
+        riskColor = "var(--color-blocked)";
+        decisionClass = "blocked";
+      } else if (action.outcome === "PENDING_HITL") {
+        riskColor = "var(--color-pending)";
+        decisionClass = "pending";
+      } else if (action.outcome === "EXECUTION_ERROR") {
+        riskColor = "var(--color-blocked)";
+        decisionClass = "blocked";
+      }
+      
+      div.style.borderLeftColor = riskColor;
+      
+      const riskScore = action.risk_score !== undefined && action.risk_score !== null ? action.risk_score : 0;
+      const defaultRemediation = action.outcome === "EXECUTION_ERROR" ? `System Error: ${action.error}` : "No rules triggered.";
+      
+      const explanation = action.explanation || { risk_score: riskScore, matched_rules: [], suggested_remediation: defaultRemediation };
+      const timeline = action.timeline || [];
+      const ruleDetails = explanation.matched_rules.length > 0 
+        ? explanation.matched_rules.map(r => `<li><strong>${r.id}</strong>: ${r.description} (${r.action.toUpperCase()}, Risk: ${r.risk_score})</li>`).join('')
+        : "<li>No explicit rules matched. Allow rules applied.</li>";
+
+      let hitlActionsHtml = '';
+      if (action.outcome === "PENDING_HITL") {
+        hitlActionsHtml = `
+          <div class="hitl-actions" style="margin-top: 10px; display: flex; gap: 8px;">
+            <button class="btn-approve" onclick="resolveChatHITL('${action.request_id}', this)">Approve Action</button>
+            <button class="btn-reject" onclick="resolveChatHITL('${action.request_id}', this)">Reject Action</button>
+          </div>
+        `;
+      }
+      
+      div.innerHTML = `
+        <div class="chat-message-meta">SentinelAI Governance Dispatch Interceptor</div>
+        <div class="explanation-box ${decisionClass}" style="margin-top: 4px; padding: 12px; border-radius: 8px;">
+          <div style="color: ${riskColor}; font-size: 13px; font-weight: 700; margin-bottom: 4px;">
+            OUTCOME: ${outcomeText}
+          </div>
+          <div style="font-size: 11px; color: var(--text-primary);">
+            <strong>Triggered Rule:</strong> ${action.outcome === "EXECUTION_ERROR" ? "Gateway Execution Exception" : (action.reason || "Default allow rules")}
+          </div>
+          
+          <div class="risk-meter-container" style="margin-top: 6px;">
+            <span style="font-size: 10px; font-weight: 700; color: var(--text-secondary);">RISK:</span>
+            <div class="risk-bar">
+              <div class="risk-fill" style="width: ${riskScore}%; background: ${riskColor};"></div>
+            </div>
+            <span style="font-size: 10px; font-weight: 800; color: ${riskColor};">${riskScore}/100</span>
+          </div>
+
+          <div class="remediation-msg" style="margin-top: 8px; font-size: 11px;">
+            <strong>Remediation:</strong> ${explanation.suggested_remediation || "No remediation required."}
+          </div>
+        </div>
+        
+        <!-- Timeline -->
+        <div style="margin-top: 8px;">
+          <h3 style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px;">GOVERNANCE TIMELINE</h3>
+          <div class="timeline-container" style="gap: 8px; border-left: 1px solid rgba(255, 255, 255, 0.05); padding-left: 8px; margin-left: 4px;">
+            ${timeline.map((step, index) => {
+              let nodeClass = "active";
+              if (index === timeline.length - 1) nodeClass = decisionClass;
+              return `
+                <div class="timeline-node ${nodeClass}" style="padding-left: 14px; margin-bottom: 6px; position: relative;">
+                  <div class="timeline-step" style="font-size: 11px; font-weight: 600;">${step.step}</div>
+                  <div class="timeline-details" style="font-size: 10px; color: var(--text-secondary);">${step.details}</div>
+                </div>
+              `;
+            }).join('')}
+          </div>
+        </div>
+
+        <div style="margin-top: 8px; border-top: 1px solid rgba(255, 255, 255, 0.05); padding-top: 8px;">
+          <h3 style="font-size: 11px; font-weight: 700; color: var(--text-secondary); margin-bottom: 4px;">Triggered Rules Details:</h3>
+          <ul style="font-size: 11px; padding-left: 16px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 2px;">
+            ${ruleDetails}
+          </ul>
+        </div>
+        ${hitlActionsHtml}
+      `;
+      
+      chatLog.appendChild(div);
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+    
+    async function resolveChatHITL(id, buttonEl) {
+      const container = buttonEl.parentElement;
+      const isApprove = buttonEl.className.includes("approve");
+      const decision = isApprove ? "approve" : "reject";
+      
+      container.innerHTML = `<span style="font-size:11px; color:var(--text-secondary);">Resolving dispatch...</span>`;
+      
+      try {
+        const res = await fetch(`/hitl/${id}/${decision}`, { method: 'POST' });
+        if (res.ok) {
+          container.innerHTML = `<span style="font-size:11px; font-weight:700; color:${isApprove ? 'var(--color-allowed)' : 'var(--color-blocked)'};">Resolved: ${decision.toUpperCase()}ED & EXECUTED</span>`;
+          refreshInbox();
+          refreshDashboardData();
+        } else {
+          container.innerHTML = `<span style="font-size:11px; color:var(--color-blocked);">Resolution failed</span>`;
+        }
+      } catch (err) {
+        container.innerHTML = `<span style="font-size:11px; color:var(--color-blocked);">Error: ${err}</span>`;
+      }
+    }
+
+    function verifyPlaygroundSession() {
+      const agentId = document.getElementById('play-agent').value.trim();
+      const role = document.getElementById('play-role').value;
+      const alertBanner = document.getElementById('chat-alert-banner');
+      const infoBanner = document.getElementById('chat-info-banner');
+      
+      if (!agentId || role === 'anonymous') {
+        alertBanner.innerText = "⚠️ WARNING: Unauthenticated session. Policy rules will automatically BLOCK any tool executions.";
+        alertBanner.style.display = "flex";
+      } else {
+        alertBanner.style.display = "none";
+      }
+      
+      // Fetch Gmail Mode and show banner
+      fetch('/health')
+        .then(res => res.json())
+        .then(status => {
+          if (status.gmail_mode === "LIVE") {
+            infoBanner.innerHTML = `🟢 <strong>Live Mail System:</strong> Connected to Gmail API. Tool requests will execute on actual mailbox items.`;
+            infoBanner.style.display = "flex";
+            infoBanner.style.color = "var(--color-allowed)";
+            infoBanner.style.background = "rgba(16, 185, 129, 0.05)";
+            infoBanner.style.borderBottom = "1px solid rgba(16, 185, 129, 0.12)";
+          } else {
+            infoBanner.innerHTML = `🟡 <strong>Sandbox Simulator:</strong> Operating in stateful Mock Mode. Email operations are sandboxed.`;
+            infoBanner.style.display = "flex";
+            infoBanner.style.color = "#F59E0B";
+            infoBanner.style.background = "rgba(245, 158, 11, 0.05)";
+            infoBanner.style.borderBottom = "1px solid rgba(245, 158, 11, 0.12)";
+          }
+        });
+    }
+
+
+    // Search audit logs
+    async function searchAuditLogs() {
+      const agent = document.getElementById('filter-agent').value;
+      const tool = document.getElementById('filter-tool').value;
+      const action = document.getElementById('filter-action').value;
+      const policy = document.getElementById('filter-policy').value;
+
+      const tbody = document.getElementById('audit-table-body');
+      tbody.innerHTML = `<tr><td colspan="8" style="color: var(--text-secondary); text-align: center;">Searching logs...</td></tr>`;
+
+      try {
+        let params = new URLSearchParams();
+        if (agent) params.append('agent_id', agent);
+        if (tool) params.append('tool', tool);
+        if (action) params.append('action', action);
+        if (policy) params.append('policy_version', policy);
+        params.append('limit', 100);
+
+        const res = await fetch(`/audit/search?${params.toString()}`);
+        const data = await res.json();
+
+        if (data.length === 0) {
+          tbody.innerHTML = `<tr><td colspan="8" style="color: var(--text-muted); text-align: center;">No audit records matching filters located.</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = data.map((log, index) => {
+          let badgeClass = "badge-allowed";
+          if (log.action === "block" || log.action === "hitl_rejected") badgeClass = "badge-blocked";
+          if (log.action === "require_hitl" || log.action === "pending") badgeClass = "badge-pending";
+
+          const rowId = `audit-details-row-${index}`;
+          const formattedDate = log.timestamp ? log.timestamp.replace('T', ' ').substring(0, 19) : "";
+          
+          return `
+            <tr>
+              <td style="font-size: 12px; color: var(--text-secondary);">${formattedDate}</td>
+              <td><strong>${log.agent_id}</strong></td>
+              <td><code style="font-family:'JetBrains Mono'; font-size:11px;">${log.tool}</code></td>
+              <td><span class="badge ${badgeClass}">${log.action}</span></td>
+              <td style="font-size: 12px; color: var(--text-secondary);">${log.reason || "None"}</td>
+              <td><strong>${log.risk_score || 0}</strong></td>
+              <td><span style="font-size: 11px; font-weight: 500;">${log.policy_version || "v1"}</span></td>
+              <td>
+                <button class="btn-version" style="padding: 2px 6px; font-size: 10px;" onclick="toggleDetailsRow('${rowId}')">Expand</button>
+              </td>
+            </tr>
+            <tr id="${rowId}" style="display: none; background: rgba(0,0,0,0.2);">
+              <td colspan="8" style="padding: 16px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                  <div>
+                    <h4 style="font-size: 12px; font-weight: 700; margin-bottom: 6px;">Params / Context</h4>
+                    <pre style="margin: 0;">${JSON.stringify(log.params || {}, null, 2)}</pre>
+                  </div>
+                  <div>
+                    <h4 style="font-size: 12px; font-weight: 700; margin-bottom: 6px;">Full Dispatch Trace Log</h4>
+                    <pre style="margin: 0; max-height: 250px;">${JSON.stringify(log, null, 2)}</pre>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          `;
+        }).join('');
+
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8" style="color: var(--color-blocked); text-align: center;">Error running search query.</td></tr>`;
+      }
+    }
+
+    function toggleDetailsRow(rowId) {
+      const row = document.getElementById(rowId);
+      row.style.display = row.style.display === "none" ? "table-row" : "none";
+    }
+
+    // Refresh loops
+    setInterval(() => {
+      refreshInbox();
+      refreshDashboardData();
+    }, 4000);
+
+    setInterval(() => {
+      refreshConnectorStatus();
+    }, 30000);
+
+    // Initial loads
+    refreshInbox();
+    refreshDashboardData();
+    refreshConnectorStatus();
+
+    let gmailIsLive = false;
+
+    async function refreshConnectorStatus() {
+      const container = document.getElementById('connector-list');
+      if (!container) return;
+      try {
+        const res = await fetch('/connector/status');
+        const data = await res.json();
+        const connectors = data.connectors || [];
+        container.innerHTML = connectors.map(c => {
+          const isLive = c.status === 'live';
+          const isMock = c.status === 'mock';
+          const isPlanned = c.status === 'planned';
+          const dot = isLive ? '#10B981' : isMock ? '#F59E0B' : '#475569';
+          const label = isLive ? '🟢 LIVE' : isMock ? '🔷 MOCK' : '⬜ PLANNED';
+          const opacity = isPlanned ? '0.5' : '1';
+          return `
+            <div style="display:flex; align-items:center; justify-content:space-between;
+                        padding: 6px 10px; border-radius: 8px;
+                        background: rgba(255,255,255,0.03);
+                        border: 1px solid rgba(255,255,255,0.06);
+                        opacity: ${opacity};">
+              <div style="display:flex; align-items:center; gap: 8px;">
+                <div style="width:8px; height:8px; border-radius:50%; background:${dot}; flex-shrink:0;"></div>
+                <div>
+                  <div style="font-size:12px; font-weight:600; color:var(--text-primary);">${c.name}</div>
+                  <div style="font-size:10px; color:var(--text-muted);">${c.type}</div>
+                </div>
+              </div>
+              <span style="font-size:10px; font-weight:700; color:${dot};">${label}</span>
+            </div>
+          `;
+        }).join('');
+        const note = document.createElement('div');
+        note.style.cssText = 'font-size:10px; color:var(--text-muted); margin-top:4px; line-height:1.5;';
+        note.innerText = '↳ All connectors share the same governance engine.';
+        container.appendChild(note);
+      } catch (err) {
+        if (container) container.innerHTML = `<div style="font-size:11px; color:var(--color-blocked);">Could not load connectors</div>`;
+      }
+    }
+
+    async function handleAuthClick() {
+      if (gmailIsLive) {
+        try {
+          const res = await fetch('/auth/logout', { method: 'POST' });
+          if (res.ok) {
+            refreshInbox();
+            refreshDashboardData();
+          } else {
+            alert("Disconnect failed.");
+          }
+        } catch (err) {
+          alert("Error disconnecting: " + err);
+        }
+      } else {
+        window.location.href = '/auth/login';
+      }
+    }
+  </script>
+</body>
+</html>
+

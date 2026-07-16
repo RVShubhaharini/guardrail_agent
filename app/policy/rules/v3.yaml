@@ -1,0 +1,185 @@
+rules:
+  # ==========================================
+  # LAYER 1: Authentication Verification
+  # ==========================================
+  - id: block_unauthenticated_agent
+    description: "Block unauthenticated or anonymous agent requests"
+    tool: "*"
+    condition: "role == 'anonymous' or not agent_id"
+    action: block
+    risk_score: 100
+    remediation: "Agent session is unauthenticated. Please re-authenticate."
+
+  # ==========================================
+  # LAYER 3: Tool Permission & Role Checks (RBAC)
+  # ==========================================
+  - id: restrict_tool_by_agent_role
+    description: "Block database deletions for non-authorized roles (e.g., support or guest)"
+    tool: db_delete
+    condition: "role in ('hr_agent', 'guest', 'support')"
+    action: block
+    risk_score: 95
+    remediation: "Your user role does not have authorization to call database delete tools."
+
+  - id: block_guest_delete_email
+    description: "Block guests from deleting emails"
+    tool: gmail_delete_email
+    condition: "role == 'guest'"
+    action: block
+    risk_score: 95
+    remediation: "Guest accounts are not authorized to delete corporate emails."
+
+  # ==========================================
+  # LAYER 5: Sensitive Records & Attachment Classification
+  # ==========================================
+  - id: block_confidential_attachment_external
+    description: "Block confidential attachments from being sent to external domains"
+    tool: gmail_send_email
+    condition: "has_confidential_attachment and recipient_domain not in internal_domains"
+    action: block
+    risk_score: 98
+    remediation: "Access Denied: Sending attachments flagged as confidential (e.g. salary, tax, secret) to external domains is strictly prohibited."
+
+  - id: block_sensitive_read_external
+    description: "Block read of confidential files if context is external / unclassified"
+    tool: read_file
+    condition: "data_classification == 'restricted' and role != 'admin'"
+    action: block
+    risk_score: 90
+    remediation: "Access denied. Restricted files can only be accessed by admin roles."
+
+  # ==========================================
+  # LAYER 4: Temporal & Spatial Context Check
+  # ==========================================
+  - id: after_hours_write_hitl
+    description: "Require HITL for data writes outside business hours (6am-9pm)"
+    tool: db_write
+    condition: "hour_of_day < 6 or hour_of_day > 21"
+    action: require_hitl
+    risk_score: 50
+    remediation: "Database writes after hours require validation to prevent accidental modifications."
+
+  # ==========================================
+  # LAYER 6: Cumulative Policy Evaluation (Prevention of batch bypass)
+  # ==========================================
+  - id: block_cumulative_delete_bypass
+    description: "Block delete if cumulative deleted records in the last 5 minutes exceeds 500"
+    tool: db_delete
+    condition: "cumulative_deletes_5m > 500"
+    action: block
+    risk_score: 98
+    remediation: "Cumulative delete limit exceeded. You cannot delete more than 500 records in a 5-minute window."
+
+  - id: hitl_bulk_email_delete
+    description: "Require HITL for rapid email deletions"
+    tool: gmail_delete_email
+    condition: "cumulative_email_deletes_5m > 3"
+    action: require_hitl
+    risk_score: 65
+    remediation: "Bulk email deletions detected. Human authorization is required to clear multiple message threads."
+
+  # ==========================================
+  # LAYER 7: Rate Limiting & Network Safety
+  # ==========================================
+  - id: rate_limit_any_tool
+    description: "Block if this agent has made more than 10 calls to this tool in the last 60s"
+    tool: "*"
+    condition: "calls_last_minute > 10"
+    action: block
+    risk_score: 85
+    remediation: "Rate limit exceeded. Try again after 60 seconds."
+
+  # ==========================================
+  # LAYER 9: Human-in-the-Loop Standard Rules
+  # ==========================================
+  - id: hitl_external_email
+    description: "Require HITL for any email sent to an external domain"
+    tool: gmail_send_email
+    condition: "recipient_domain not in internal_domains"
+    action: require_hitl
+    risk_score: 60
+    remediation: "Emails sent to domains outside ACME Corp require human verification."
+
+  - id: hitl_external_forward
+    description: "Require HITL for forwarding messages to external domains"
+    tool: gmail_forward_email
+    condition: "recipient_domain not in internal_domains"
+    action: require_hitl
+    risk_score: 65
+    remediation: "Forwarding corporate communication to external domains requires approval."
+
+  # ==========================================
+  # LAYER 4 (Extended): After-Hours Email Safety
+  # ==========================================
+  - id: hitl_after_hours_send
+    description: "Require HITL for emails sent outside business hours (before 6am or after 9pm UTC)"
+    tool: gmail_send_email
+    condition: "hour_of_day < 6 or hour_of_day > 21"
+    action: require_hitl
+    risk_score: 45
+    remediation: "Email sends outside business hours require human verification to prevent unauthorized after-hours data exfiltration."
+
+  # ==========================================
+  # LAYER 3 (Extended): Intern/Support Cannot Send External
+  # ==========================================
+  - id: block_intern_external_send
+    description: "Block intern or support roles from sending emails to external domains"
+    tool: gmail_send_email
+    condition: "role in ('intern', 'support') and recipient_domain not in internal_domains"
+    action: block
+    risk_score: 88
+    remediation: "Your role is not authorized to send emails to external recipients. Contact your manager."
+
+  # ==========================================
+  # LAYER 5 (Extended): Block Forward of Confidential Attachment
+  # ==========================================
+  - id: block_confidential_forward_external
+    description: "Block forwarding emails with confidential attachments to external domains"
+    tool: gmail_forward_email
+    condition: "has_confidential_attachment and recipient_domain not in internal_domains"
+    action: block
+    risk_score: 99
+    remediation: "CRITICAL: Forwarding confidential attachments to external domains is strictly prohibited."
+
+  # ==========================================
+  # LAYER 8: Escalating Enforcement (Repeat Violators)
+  # ==========================================
+  - id: hitl_repeat_violator
+    description: "Require HITL for agents with 3 or more previous policy violations"
+    tool: "*"
+    condition: "previous_violations >= 3"
+    action: require_hitl
+    risk_score: 70
+    remediation: "Your agent session has triggered multiple policy violations. All further actions require human approval."
+
+  # ==========================================
+  # LAYER 6 (Extended): Mass Archive Detection
+  # ==========================================
+  - id: hitl_bulk_email_archive
+    description: "Require HITL for rapid mass email archiving (more than 5 in 5 minutes)"
+    tool: gmail_archive_email
+    condition: "cumulative_email_deletes_5m > 5"
+    action: require_hitl
+    risk_score: 60
+    remediation: "Bulk archive operations detected. Please confirm intent with a human operator."
+
+  # ==========================================
+  # Core PS-3.1 Base Rules (Direct Alignment)
+  # ==========================================
+  - id: block_bulk_delete
+    description: "Block any database delete where record count exceeds 100"
+    tool: db_delete
+    condition: "params.get('record_count', 0) > 100"
+    action: block
+    risk_score: 95
+    remediation: "Reduce the record delete count below 100, or seek admin escalation."
+
+  - id: hitl_external_email
+    description: "Require HITL for any email sent to an external domain"
+    tool: send_email
+    condition: "(params.get('recipient_domain') or recipient_domain) not in internal_domains"
+    action: require_hitl
+    risk_score: 60
+    remediation: "Emails sent to domains outside ACME Corp require human verification."
+
+
