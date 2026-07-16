@@ -150,6 +150,102 @@ ALL_TOOLS = GMAIL_TOOLS + [
 # In-memory store for active agent chat histories: agent_id -> list of genai.types.Content
 conversation_histories = {}
 
+def _parse_groq_instruction(instruction: str, history_list: List[Any]) -> Optional[List[Dict[str, Any]]]:
+    """Uses Groq (Llama-3.3-70b-versatile) to extract structured tool calls from instruction history."""
+    import sys
+    if "pytest" in sys.modules or "_pytest" in sys.modules or os.getenv("TESTING") == "true":
+        return None
+
+    groq_api_key = settings.groq_api_key
+    if not groq_api_key:
+        return None
+
+    try:
+        import requests
+        import json
+
+        # Build chat history context
+        formatted_messages = []
+        system_prompt = (
+            "You are an AI Agent planner for SentinelAI automation. Your job is to extract tool calls from the user's instructions.\n"
+            "Supported tools:\n"
+            "1. gmail_send_email: fields {'to': string, 'subject': string, 'body': string, 'attachments': list of dicts}\n"
+            "2. gmail_search_emails: fields {'query': string}\n"
+            "3. gmail_delete_email: fields {'message_id': string}\n"
+            "4. gmail_archive_email: fields {'message_id': string}\n"
+            "5. db_delete: fields {'record_count': integer}\n"
+            "6. read_file: fields {'path': string}\n"
+            "7. db_write: fields {'record_id': string, 'data': string}\n\n"
+            "Strict Rules:\n"
+            "- Only produce tool calls if explicitly requested or logically required by the prompt.\n"
+            "- If the user asks to search and delete/archive emails, you MUST ONLY output the gmail_search_emails tool call in this turn. "
+            "Do NOT output a gmail_delete_email tool call until you are provided with the actual message_id in the execution results. "
+            "Never use placeholder values like '{search_result}' or guess IDs for gmail_delete_email.\n"
+            "- Double check email addresses: read the user's latest instruction carefully and extract the exact email recipient. "
+            "Avoid reusing old typo-ridden email addresses from the history if the user specified a new or corrected one.\n"
+            "- Return a JSON object with a single key 'tool_calls' mapping to a list of tool call objects.\n"
+            "- If no tools are needed, return an empty list under 'tool_calls'.\n"
+            "- Do not output any thinking or markdown formatting. Output only raw JSON."
+        )
+        formatted_messages.append({"role": "system", "content": system_prompt})
+
+        # Map history
+        for h in history_list:
+            role = "assistant" if h.role == "model" else h.role
+            parts_text = []
+            for part in h.parts:
+                if getattr(part, "text", None):
+                    parts_text.append(part.text)
+                elif getattr(part, "function_call", None):
+                    parts_text.append(f"Tool Call: {part.function_call.name} with {dict(part.function_call.args)}")
+            
+            if parts_text:
+                formatted_messages.append({"role": role, "content": " ".join(parts_text)})
+
+        headers = {
+            "Authorization": f"Bearer {groq_api_key}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "llama-3.3-70b-versatile",
+            "messages": formatted_messages,
+            "response_format": {"type": "json_object"},
+            "temperature": 0.0
+        }
+
+        res = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=5.0
+        )
+
+        if res.status_code == 200:
+            content = res.json()["choices"][0]["message"]["content"]
+            result = json.loads(content.strip())
+            calls = result.get("tool_calls", [])
+            
+            normalized_calls = []
+            inst_lower = instruction.lower()
+            should_delete = "delete" in inst_lower or "remove" in inst_lower
+
+            for call in calls:
+                tool_name = call.get("name") or call.get("tool")
+                tool_input = call.get("input") or call.get("fields") or call.get("parameters") or call.get("arguments") or {}
+                if tool_name:
+                    normalized_call = {
+                        "name": tool_name,
+                        "input": tool_input
+                    }
+                    if tool_name == "gmail_search_emails" and should_delete:
+                        normalized_call["delete_after_search"] = True
+                    normalized_calls.append(normalized_call)
+            print(f"[AI Agent - Groq] Extracted and normalized tool calls: {normalized_calls}")
+            return normalized_calls
+    except Exception as e:
+        logger.error(f"[AI Agent - Groq] Failed to parse: {e}")
+    return None
+
 def run_agent_task(
     agent_id: str,
     instruction: str,
@@ -157,12 +253,13 @@ def run_agent_task(
     execution_gateway = None,
     role: str = "junior_dev"
 ) -> List[Dict[str, Any]]:
-    """Runs a natural language task instruction through the Gemini-2.5-flash agent.
+    """Runs a natural language task instruction through the Llama-3.3 or Gemini-2.5 agent.
     Intercepts proposed tool calls and evaluates them against SentinelAI rules.
     If allowed, dispatches execution via the ExecutionGateway."""
 
     api_key = settings.gemini_api_key
-    tool_calls = []
+    groq_api_key = settings.groq_api_key
+    tool_calls = None
 
     # Ensure conversation history is initialized for this agent session
     if agent_id not in conversation_histories:
@@ -177,7 +274,12 @@ def run_agent_task(
         )
     )
 
-    if api_key:
+    # 1. Try Groq Llama Parser First
+    if groq_api_key:
+        tool_calls = _parse_groq_instruction(instruction, history)
+
+    # 2. Try Gemini Parser if Groq is not configured or failed
+    if tool_calls is None and api_key:
         try:
             logger.info(f"Initializing real Gemini AI agent for SentinelAI (History length: {len(history)})...")
             client = genai.Client(api_key=api_key)
@@ -203,8 +305,8 @@ def run_agent_task(
 
             # Extract generated function calls
             if response.function_calls:
-                # Store the model's turn containing the tool calls
                 history.append(response.candidates[0].content)
+                tool_calls = []
                 for call in response.function_calls:
                     args_dict = dict(call.args) if call.args else {}
                     tool_calls.append({
@@ -212,9 +314,7 @@ def run_agent_task(
                         "input": args_dict
                     })
             else:
-                # Text response - store the model's response in history
                 history.append(response.candidates[0].content)
-                # .text can be None in thinking mode — extract from parts as fallback
                 response_text = response.text
                 if not response_text and response.candidates:
                     parts = response.candidates[0].content.parts or []
@@ -233,9 +333,10 @@ def run_agent_task(
                 }]
         except Exception as e:
             logger.error(f"Gemini API execution failed: {e}. Falling back to local rule-based mock parser.")
-            tool_calls = _parse_mock_instruction(instruction, history)
-    else:
-        logger.info("No GEMINI_API_KEY found. Running rule-based mock parser.")
+
+    # 3. Fallback to local mock parser
+    if tool_calls is None:
+        logger.info("Running local rules-based mock parser fallback.")
         tool_calls = _parse_mock_instruction(instruction, history)
 
     # Process and evaluate tool calls
@@ -447,6 +548,73 @@ def run_agent_task(
     any_blocked_or_pending = any(r.get("outcome") in ("BLOCKED", "PENDING_HITL") for r in results)
     
     if tool_response_parts and not any_blocked_or_pending:
+        # 1. Try Groq for final response if active
+        if groq_api_key:
+            try:
+                import requests
+                logger.info("Calling Groq API for final conversational turn Llama-3.3-70b-versatile...")
+
+                # Format messages history
+                formatted_messages = [
+                    {"role": "system", "content": "You are SentinelAI assistant. Summarize the tool execution results naturally for the user."}
+                ]
+
+                # Map history turns
+                for h in history:
+                    role = "assistant" if h.role == "model" else h.role
+                    text_parts = [p.text for p in h.parts if getattr(p, "text", None)]
+                    if text_parts:
+                        formatted_messages.append({"role": role, "content": " ".join(text_parts)})
+
+                # Append execution result turn
+                formatted_messages.append({
+                    "role": "user",
+                    "content": f"The tool call was successfully executed. Results: {json.dumps(results)}"
+                })
+
+                headers = {
+                    "Authorization": f"Bearer {groq_api_key}",
+                    "Content-Type": "application/json"
+                }
+                payload = {
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": formatted_messages,
+                    "temperature": 0.5
+                }
+
+                res = requests.post(
+                    "https://api.groq.com/openai/v1/chat/completions",
+                    headers=headers,
+                    json=payload,
+                    timeout=5.0
+                )
+
+                if res.status_code == 200:
+                    response_text = res.json()["choices"][0]["message"]["content"]
+
+                    # Sync turn back to history
+                    history.append(
+                        types.Content(
+                            role="model",
+                            parts=[types.Part.from_text(text=response_text)]
+                        )
+                    )
+
+                    results.append({
+                        "tool": "conversational_response",
+                        "input": {},
+                        "outcome": "TEXT_RESPONSE",
+                        "text": response_text,
+                        "risk_score": 0,
+                        "reason": "Groq Llama-3.3 final response",
+                        "explanation": None,
+                        "timeline": []
+                    })
+                    return results
+            except Exception as e:
+                logger.error(f"Groq API final response generation failed: {e}. Falling back to Gemini.")
+
+        # 2. Try Gemini
         if api_key:
             history.append(
                 types.Content(
@@ -455,7 +623,6 @@ def run_agent_task(
                 )
             )
             
-            # Call Gemini again to let the model interpret execution outcomes and respond
             try:
                 logger.info("Calling Gemini API again for final conversational turn with tool results...")
                 client = genai.Client(api_key=api_key)
