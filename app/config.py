@@ -10,6 +10,8 @@ class Settings(BaseSettings):
     aws_default_region: str = Field(default="us-east-1", validation_alias="AWS_DEFAULT_REGION")
     audit_table: str = Field(default="action_guard_audit", validation_alias="AUDIT_TABLE")
     active_policy_version: str = Field(default="v1", validation_alias="ACTIVE_POLICY_VERSION")
+    enable_monitor: bool = Field(default=False, validation_alias="ENABLE_MONITOR")
+    monitor_interval: int = Field(default=30, validation_alias="MONITOR_INTERVAL")
 
     model_config = SettingsConfigDict(
         env_file=".env",

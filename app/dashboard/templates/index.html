@@ -701,6 +701,10 @@
     </div>
     
     <div style="display: flex; align-items: center; gap: 14px;">
+      <div class="active-policy-status" id="monitor-status-badge" style="border-color: rgba(245, 158, 11, 0.3);">
+        <span class="status-dot" id="monitor-status-dot" style="background-color: var(--color-pending); box-shadow: 0 0 8px var(--color-pending);"></span>
+        <span>Autonomous Mode: <strong id="monitor-status-label">OFF</strong></span>
+      </div>
       <div class="active-policy-status" style="border-color: rgba(56, 189, 248, 0.3);">
         <span class="status-dot"></span>
         <span>Governance Policy: <strong id="active-policy-label">v1</strong></span>
@@ -1153,6 +1157,22 @@
         // Update tags
         document.getElementById('active-policy-label').innerText = health.policy_version;
         document.getElementById('connector-mode-label').innerText = health.gmail_mode;
+        
+        // Update monitor status
+        const mLabel = document.getElementById('monitor-status-label');
+        const mDot = document.getElementById('monitor-status-dot');
+        const mBadge = document.getElementById('monitor-status-badge');
+        if (health.monitor_active) {
+          mLabel.innerText = "ACTIVE";
+          mDot.style.backgroundColor = "var(--color-allowed)";
+          mDot.style.boxShadow = "0 0 8px var(--color-allowed)";
+          mBadge.style.borderColor = "rgba(16, 185, 129, 0.3)";
+        } else {
+          mLabel.innerText = "OFF";
+          mDot.style.backgroundColor = "var(--color-pending)";
+          mDot.style.boxShadow = "0 0 8px var(--color-pending)";
+          mBadge.style.borderColor = "rgba(245, 158, 11, 0.3)";
+        }
         
         const badge = document.getElementById('connector-status-badge');
         const authBtn = document.getElementById('auth-btn');

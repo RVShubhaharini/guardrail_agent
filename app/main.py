@@ -60,6 +60,12 @@ app.include_router(hitl_router)
 app.include_router(audit_router)
 app.include_router(dashboard_router)
 
+
+@app.on_event("startup")
+def on_startup():
+    from app.agent.monitor import start_inbox_monitor
+    start_inbox_monitor(app)
+
 @app.get("/health")
 def health():
     """Service health state check."""
@@ -67,7 +73,8 @@ def health():
         "status": "ok", 
         "dry_run": evaluator.dry_run, 
         "policy_version": evaluator.policy_engine.active_version,
-        "gmail_mode": "LIVE" if gmail_connector.is_live else "MOCK"
+        "gmail_mode": "LIVE" if gmail_connector.is_live else "MOCK",
+        "monitor_active": settings.enable_monitor
     }
 
 @app.get("/gmail/inbox")
