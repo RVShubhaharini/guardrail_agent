@@ -764,7 +764,13 @@
             <h2 class="card-title">📬 Simulated Gmail Inbox Visualizer</h2>
             
             <div style="display: flex; align-items: center; gap: 8px;">
-              <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Operator Role:</span>
+              <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase;">Folder:</span>
+              <select class="form-select" id="inbox-folder-select" style="padding: 2px 8px; font-size: 11px; width: 90px;" onchange="refreshInbox()">
+                <option value="INBOX" selected>Inbox</option>
+                <option value="SENT">Sent</option>
+                <option value="TRASH">Trash</option>
+              </select>
+              <span style="font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-left: 8px;">Operator Role:</span>
               <select class="form-select" id="inbox-role-select" style="padding: 2px 8px; font-size: 11px; width: 110px;" onchange="refreshInbox()">
                 <option value="admin">Admin</option>
                 <option value="developer">Developer</option>
@@ -782,11 +788,27 @@
               <button class="btn-action" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); color: #F59E0B;" onclick="simulateIncomingMail('payroll')">💼 Payroll Audit</button>
               <button class="btn-action" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); color: #10B981;" onclick="simulateIncomingMail('ceo')">👑 CEO VIP</button>
               <button class="btn-action" style="background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.2); color: #38BDF8;" onclick="simulateIncomingMail('expense')">💳 Expense Claim</button>
+              <button class="btn-action" style="background: rgba(167, 139, 250, 0.1); border-color: rgba(167, 139, 250, 0.2); color: #A78BFA;" onclick="simulateIncomingMail('reply_req')">💬 Ask for Reply</button>
             </div>
 
             <div class="inbox-list" id="inbox-list-container">
               <!-- Dynamically populated inbox -->
               <div style="text-align: center; color: var(--text-muted); padding: 40px;">Loading simulated mail inbox...</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Left Sidebar: Guardian Agent Console -->
+        <div class="card-panel" style="margin-top: 24px; border-color: rgba(16, 185, 129, 0.2); background: linear-gradient(180deg, rgba(16, 185, 129, 0.02) 0%, rgba(0,0,0,0) 100%);">
+          <div class="card-header">
+            <h2 class="card-title" style="color: #10B981; display: flex; align-items: center; gap: 8px;">
+              <span>🛡️ Guardian Agent Console</span>
+            </h2>
+            <span class="badge" style="background: rgba(16, 185, 129, 0.1); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.2); font-size: 10px; padding: 2px 6px;">ACTIVE</span>
+          </div>
+          <div class="card-content" style="display: flex; flex-direction: column; gap: 12px;" id="guardian-alerts-container">
+            <div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 13px;">
+              No threats detected. SentinelAI is actively guarding your inbox.
             </div>
           </div>
         </div>
@@ -802,6 +824,21 @@
             <div class="card-content" style="max-height: 250px; overflow-y: auto;">
               <div class="hitl-queue" id="hitl-list">
                 <div style="color: var(--text-muted); text-align: center; padding: 20px;">No pending actions requiring authorization.</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Quarantined Threat Vault & Saved Email Logs -->
+          <div class="card-panel" style="border-color: rgba(239, 68, 68, 0.3); background: linear-gradient(180deg, rgba(239, 68, 68, 0.02) 0%, rgba(0,0,0,0) 100%);">
+            <div class="card-header">
+              <h2 class="card-title" style="color: #EF4444; display: flex; align-items: center; gap: 8px;">
+                <span>☣️ Quarantined Threat Vault & Saved Logs</span>
+              </h2>
+              <span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #EF4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 10px; padding: 2px 6px;" id="quarantine-count">0 Saved Threats</span>
+            </div>
+            <div class="card-content" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px;" id="quarantine-vault-list">
+              <div style="color: var(--text-muted); text-align: center; padding: 20px; font-size: 12px;">
+                No deleted threats stored. Quarantined email content will be archived here.
               </div>
             </div>
           </div>
@@ -1019,6 +1056,32 @@
 
   </div>
 
+  <!-- Guardian Modal Overlay -->
+  <div id="guardian-modal" style="display: none !important; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(4px); z-index: 9999; align-items: center; justify-content: center; pointer-events: none !important;">
+    <div style="background: #0B1528; border: 1px solid rgba(167, 139, 250, 0.3); border-radius: 12px; width: 480px; padding: 24px; box-shadow: 0 8px 32px rgba(167, 139, 250, 0.15); display: flex; flex-direction: column; gap: 16px; position: relative;">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <span style="font-size: 24px;">🛡️</span>
+        <div>
+          <h3 id="guardian-modal-title" style="margin: 0; font-size: 16px; font-weight: 700; color: #A78BFA; font-family: 'Outfit', sans-serif;">SentinelAI Guardian Notification</h3>
+          <p id="guardian-modal-subtitle" style="margin: 4px 0 0 0; font-size: 12px; color: var(--text-muted);"></p>
+        </div>
+      </div>
+      
+      <div id="guardian-modal-message" style="font-size: 13px; color: var(--text-primary); line-height: 1.5; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; font-style: italic; white-space: pre-wrap;">
+      </div>
+      
+      <div id="guardian-modal-input-container" style="display: flex; flex-direction: column; gap: 8px;">
+        <label style="font-size: 11px; font-weight: 700; color: var(--text-secondary); text-transform: uppercase;">What message or instruction should the agent reply?</label>
+        <textarea id="guardian-modal-input" placeholder="Type your response here..." style="width: 100%; height: 80px; padding: 10px; font-size: 12px; border-radius: 6px; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: var(--text-primary); resize: none; outline: none;"></textarea>
+      </div>
+      
+      <div style="display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px;">
+        <button id="guardian-modal-cancel" class="btn-action" style="background: transparent; border-color: rgba(255,255,255,0.1); color: var(--text-muted);" onclick="closeGuardianModal()">Cancel</button>
+        <button id="guardian-modal-submit" class="btn-action" style="background: rgba(167, 139, 250, 0.2); border-color: rgba(167, 139, 250, 0.4); color: #A78BFA; font-weight: 600;" onclick="submitGuardianModal()">Send Guided Reply</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     // Tab controller
     function switchTab(tabId) {
@@ -1072,7 +1135,8 @@
     // Live Inbox actions
     async function refreshInbox() {
       try {
-        const res = await fetch('/gmail/inbox?label=INBOX');
+        const folder = document.getElementById('inbox-folder-select').value;
+        const res = await fetch(`/gmail/inbox?label=${folder}`);
         const emails = await res.json();
         
         const container = document.getElementById('inbox-list-container');
@@ -1085,17 +1149,37 @@
 
         container.innerHTML = emails.map(email => {
           // Label badges
-          const labelsHtml = email.labels.map(l => {
-            const cls = (l === 'URGENT' || l === 'SPAM') ? 'badge-label-critical' : 'badge-label';
-            return `<span class="badge ${cls}">${l}</span>`;
+          const labels = email.labels || [];
+          const labelsHtml = labels.map(l => {
+            let bg = 'rgba(255, 255, 255, 0.1)';
+            let fg = 'var(--text-secondary)';
+            if (l === 'URGENT' || l === 'SPAM' || l === 'CRITICAL') {
+              bg = 'rgba(239, 68, 68, 0.15)';
+              fg = '#EF4444';
+            } else if (l === 'REPLIED') {
+              bg = 'rgba(16, 185, 129, 0.15)';
+              fg = '#10B981';
+            } else if (l === 'INBOX') {
+              bg = 'rgba(59, 130, 246, 0.15)';
+              fg = '#3B82F6';
+            } else if (l === 'SENT') {
+              bg = 'rgba(167, 139, 250, 0.15)';
+              fg = '#A78BFA';
+            }
+            return `<span style="display:inline-block; padding:2px 6px; font-size:10px; font-weight:700; border-radius:4px; margin-right:4px; background:${bg}; color:${fg}; border:1px solid ${fg}33;">${l}</span>`;
           }).join('');
 
           // Action buttons based on labels
           let actionButtons = '';
-          if (email.labels.includes('INBOX')) {
+          if (labels.includes('INBOX')) {
             actionButtons += `<button class="btn-action" onclick="dispatchInboxAction('gmail_archive_email', '${email.id}')">Archive</button>`;
             actionButtons += `<button class="btn-action" style="color:var(--color-blocked);" onclick="dispatchInboxAction('gmail_delete_email', '${email.id}')">Delete</button>`;
-          } else if (email.labels.includes('TRASH') || email.labels.includes('ARCHIVE')) {
+            if (!labels.includes('REPLIED') && !labels.includes('SENT')) {
+              actionButtons += `<button class="btn-action" style="color:var(--color-allowed);" onclick="askAgentToReply('${email.id}')">🤖 Ask Agent to Reply</button>`;
+            } else {
+              actionButtons += `<button class="btn-action" style="background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #10B981; pointer-events: none;">✓ Replied</button>`;
+            }
+          } else if (labels.includes('TRASH') || labels.includes('ARCHIVE')) {
             actionButtons += `<button class="btn-action" style="color:var(--color-allowed);" onclick="dispatchInboxAction('gmail_restore_email', '${email.id}')">Restore</button>`;
           }
 
@@ -1108,7 +1192,7 @@
             <div class="inbox-item">
               <div class="inbox-meta">
                 <span>From: <strong>${email.from}</strong></span>
-                <span>${email.timestamp.replace('T', ' ').substring(0, 19)}</span>
+                <span>${email.timestamp ? String(email.timestamp).replace('T', ' ').substring(0, 19) : ''}</span>
               </div>
               <div class="inbox-subject">${email.subject}</div>
               <div class="inbox-body">${email.body}</div>
@@ -1153,9 +1237,53 @@
       }
     }
 
+    async function refreshQuarantineVault() {
+      try {
+        const res = await fetch('/guardian/quarantine_vault');
+        const vault = await res.json();
+        const countBadge = document.getElementById('quarantine-count');
+        const listContainer = document.getElementById('quarantine-vault-list');
+        
+        if (countBadge) {
+          countBadge.innerText = `${vault.length} Saved Threat${vault.length === 1 ? '' : 's'}`;
+        }
+        
+        if (!listContainer) return;
+        
+        if (vault.length === 0) {
+          listContainer.innerHTML = `
+            <div style="color: var(--text-muted); text-align: center; padding: 20px; font-size: 12px;">
+              No deleted threats stored. Quarantined email content will be archived here.
+            </div>
+          `;
+          return;
+        }
+        
+        listContainer.innerHTML = vault.map(item => `
+          <div style="background: rgba(239, 68, 68, 0.04); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: 8px; padding: 12px; font-size: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+              <span style="font-weight: 700; color: #EF4444;">🚨 ${item.subject || '(No Subject)'}</span>
+              <span style="font-size: 10px; color: var(--text-muted);">${(item.quarantined_at || '').replace('T', ' ').substring(0, 19)}</span>
+            </div>
+            <div style="color: var(--text-primary); margin-bottom: 4px;"><strong>Sender:</strong> ${item.from}</div>
+            <div style="color: var(--text-secondary); background: rgba(0,0,0,0.3); padding: 8px; border-radius: 4px; margin-bottom: 6px; font-style: italic; font-size: 11px;">
+              "${item.body}"
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px;">
+              <span style="color: #EF4444; font-weight: 600;">Risk Score: ${item.risk_score}/100</span>
+              <span style="color: var(--text-muted);">Status: 🔒 Deleted & Saved to Vault</span>
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error("Error loading quarantine vault: ", err);
+      }
+    }
+
     // Refresh metrics grid & feeds
     async function refreshDashboardData() {
       try {
+        refreshQuarantineVault();
         const auditRes = await fetch('/audit/recent?limit=30');
         const audits = await auditRes.json();
         const pendingRes = await fetch('/hitl/pending');
@@ -1265,6 +1393,8 @@
           renderInspector(audits[0]);
         }
 
+        // Refresh Guardian Alerts
+        refreshGuardianAlerts();
       } catch (err) {
         console.error("Dashboard refresh error: ", err);
       }
@@ -1775,6 +1905,8 @@
         url += 'sender=ceo@acme-corp.com&subject=Strategy+Alignment&body=Hello,+let+us+align+on+key+business+direction.';
       } else if (type === 'expense') {
         url += 'sender=vendor-uber@external.com&subject=Uber+Ride+Invoice&body=Your+Uber+ride+expense+invoice+details:+UberRide+amount+is+12500+rupees.';
+      } else if (type === 'reply_req') {
+        url += 'sender=partner@external-biz.com&subject=Are+you+free+to+meet+tomorrow+at+2+PM?&body=Hi,+please+let+me+know+if+you+can+join+the+call+tomorrow.';
       }
 
       try {
@@ -1787,6 +1919,252 @@
         }
       } catch (err) {
         alert("Error: " + err);
+      }
+    }
+
+    const seenAlerts = new Set();
+    let currentModalCallback = null;
+    let currentModalAlertId = null;
+
+    function showGuardianModal(config) {
+      document.getElementById('guardian-modal-title').innerText = config.title || '🛡️ Guardian Notification';
+      
+      const box = document.getElementById('guardian-modal').firstElementChild;
+      if (config.isFraud) {
+        document.getElementById('guardian-modal-title').style.color = '#EF4444';
+        box.style.borderColor = 'rgba(239, 68, 68, 0.3)';
+        box.style.boxShadow = '0 8px 32px rgba(239, 68, 68, 0.15)';
+      } else {
+        document.getElementById('guardian-modal-title').style.color = '#A78BFA';
+        box.style.borderColor = 'rgba(167, 139, 250, 0.3)';
+        box.style.boxShadow = '0 8px 32px rgba(167, 139, 250, 0.15)';
+      }
+
+      document.getElementById('guardian-modal-subtitle').innerText = config.subtitle || '';
+      document.getElementById('guardian-modal-message').innerText = config.message || '';
+      
+      const inputContainer = document.getElementById('guardian-modal-input-container');
+      const submitBtn = document.getElementById('guardian-modal-submit');
+      const cancelBtn = document.getElementById('guardian-modal-cancel');
+      
+      document.getElementById('guardian-modal-input').value = '';
+      
+      if (config.isPrompt) {
+        inputContainer.style.display = 'flex';
+        submitBtn.innerText = 'Send Guided Reply';
+        cancelBtn.innerText = 'Cancel';
+      } else {
+        inputContainer.style.display = 'none';
+        submitBtn.innerText = 'OK';
+        cancelBtn.innerText = 'Dismiss';
+      }
+      
+      currentModalCallback = config.onSubmit || null;
+      currentModalAlertId = config.alertId || null;
+      
+      const modal = document.getElementById('guardian-modal');
+      modal.style.setProperty('display', 'flex', 'important');
+      modal.style.setProperty('pointer-events', 'auto', 'important');
+    }
+
+    function closeGuardianModal() {
+      const modal = document.getElementById('guardian-modal');
+      modal.style.setProperty('display', 'none', 'important');
+      modal.style.setProperty('pointer-events', 'none', 'important');
+      currentModalCallback = null;
+      currentModalAlertId = null;
+    }
+
+    function submitGuardianModal() {
+      const inputVal = document.getElementById('guardian-modal-input').value.trim();
+      const callback = currentModalCallback;
+      const alertId = currentModalAlertId;
+      
+      closeGuardianModal();
+      
+      if (callback) {
+        callback(alertId, inputVal);
+      }
+    }
+
+    async function refreshGuardianAlerts() {
+      try {
+        const res = await fetch('/guardian/alerts');
+        const alerts = await res.json();
+        const container = document.getElementById('guardian-alerts-container');
+        if (!container) return;
+        
+        // Dynamic Agent Notification alerts/prompts
+        alerts.forEach(item => {
+          if (!seenAlerts.has(item.id)) {
+            seenAlerts.add(item.id);
+            if (item.type === 'fraud') {
+              setTimeout(() => {
+                showGuardianModal({
+                  title: '🚨 Phishing/Fraud Email Quarantined',
+                  subtitle: `From: ${item.email.from}`,
+                  message: `Subject: ${item.email.subject || '(No Subject)'}\n\nAction taken: The mail was deleted and quarantined automatically.`,
+                  isFraud: true,
+                  isPrompt: false,
+                  onSubmit: () => { clearGuardianAlert(item.id); }
+                });
+              }, 200);
+            } else if (item.type === 'reply_request') {
+              setTimeout(() => {
+                showGuardianModal({
+                  title: '💬 Urgent: Reply Requested Quickly!',
+                  subtitle: `From: ${item.email.from}`,
+                  message: `"${item.email.body}"`,
+                  isFraud: false,
+                  isPrompt: true,
+                  alertId: item.id,
+                  onSubmit: (alertId, text) => {
+                    if (text) sendGuardianReply(alertId, text);
+                  }
+                });
+              }, 200);
+            }
+          }
+        });
+        
+        if (alerts.length === 0) {
+          container.innerHTML = `
+            <div style="text-align: center; color: var(--text-muted); padding: 20px; font-size: 13px;">
+              No threats detected. SentinelAI is actively guarding your inbox.
+            </div>
+          `;
+          return;
+        }
+        
+        container.innerHTML = alerts.map(alert => {
+          if (alert.type === 'fraud') {
+            const isDismissed = alert.dismissed;
+            return `
+              <div class="inbox-item" style="border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.05); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                <div style="font-weight:700; color:#EF4444; margin-bottom:4px; font-size:13px;">${alert.title}</div>
+                <div style="font-size:12px; color:var(--text-primary); margin-bottom:8px;">${alert.message}</div>
+                ${isDismissed ? `
+                  <div style="font-size:11px; color:#EF4444; opacity:0.8; font-weight:600;">🔒 Status: Quarantined & Auto-Deleted to Trash</div>
+                ` : `
+                  <button class="btn-action" style="background:rgba(239,68,68,0.15); border-color:rgba(239,68,68,0.25); color:#EF4444;" onclick="clearGuardianAlert('${alert.id}')">Acknowledge Threat</button>
+                `}
+              </div>
+            `;
+          } else if (alert.type === 'reply_request') {
+            const isPendingHitl = alert.status === 'pending_hitl_approval';
+            const statusText = isPendingHitl ? '⏱️ Pending HITL Approval...' : '';
+            return `
+              <div class="inbox-item" style="border: 1px solid rgba(167, 139, 250, 0.3); background: rgba(167, 139, 250, 0.05); padding: 12px; border-radius: 8px; margin-bottom: 8px;">
+                <div style="font-weight:700; color:#A78BFA; margin-bottom:4px; font-size:13px;">${alert.title}</div>
+                <div style="font-size:12px; color:var(--text-primary); margin-bottom:8px;">${alert.message}</div>
+                <div style="font-size:11px; color:var(--text-muted); margin-bottom:8px; font-style:italic;">Query: "${alert.email.body}"</div>
+                
+                ${isPendingHitl ? `
+                  <div style="font-size:12px; color:var(--color-pending); font-weight:600; margin-bottom:4px;">${statusText}</div>
+                ` : `
+                  <textarea id="reply-text-${alert.id}" placeholder="Type your guided reply here..." style="width:100%; height:60px; padding:6px; font-size:12px; border-radius:4px; background:rgba(0,0,0,0.2); border:1px solid rgba(255,255,255,0.1); color:var(--text-primary); margin-bottom:8px; resize:none;"></textarea>
+                  <button class="btn-action" style="background:rgba(167,139,250,0.15); border-color:rgba(167,139,250,0.25); color:#A78BFA;" onclick="sendGuardianReply('${alert.id}')">Send Guided Reply</button>
+                `}
+              </div>
+            `;
+          }
+        }).join('');
+      } catch (err) {
+        console.error("Error loading guardian alerts: ", err);
+      }
+    }
+
+    async function clearGuardianAlert(alertId) {
+      try {
+        const res = await fetch(`/guardian/clear_alert/${alertId}`, { method: 'POST' });
+        if (res.ok) {
+          refreshGuardianAlerts();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    async function sendGuardianReply(alertId, replyBodyText = null) {
+      let bodyText = replyBodyText;
+      if (bodyText === null) {
+        bodyText = document.getElementById(`reply-text-${alertId}`).value.trim();
+      }
+      if (!bodyText) {
+        alert("Please write a response.");
+        return;
+      }
+      
+      try {
+        const res = await fetch(`/guardian/reply?message_id=${alertId}&reply_body=${encodeURIComponent(bodyText)}`, { method: 'POST' });
+        const data = await res.json();
+        if (data.status === "executed") {
+          alert("Reply allowed and sent successfully!");
+          refreshInbox();
+          refreshDashboardData();
+        } else if (data.status === "pending") {
+          alert(`ACTION PAUSED by SentinelAI!\n\nReason: Enqueued in Human-in-the-Loop review queue. Code: hitl_external_email`);
+          refreshDashboardData();
+        } else if (data.status === "blocked") {
+          alert(`ACTION BLOCKED by SentinelAI!\n\nReason: ${data.evaluation.reason}`);
+          refreshDashboardData();
+        } else {
+          alert("Error: " + (data.message || "Unknown error"));
+        }
+      } catch (err) {
+        alert("Error sending reply: " + err);
+      }
+    }
+
+    async function askAgentToReply(emailId) {
+      try {
+        const folder = document.getElementById('inbox-folder-select').value;
+        const res = await fetch(`/gmail/inbox?label=${folder}`);
+        const emails = await res.json();
+        const email = emails.find(e => e.id === emailId);
+        if (!email) {
+          alert("Email not found.");
+          return;
+        }
+
+        showGuardianModal({
+          title: '🤖 Ask Agent to Reply',
+          subtitle: `To: ${email.from}`,
+          message: `Subject: ${email.subject || '(No Subject)'}\n\n"${email.body}"`,
+          isFraud: false,
+          isPrompt: true,
+          alertId: emailId,
+          onSubmit: async (emailId, text) => {
+            if (text) {
+              try {
+                const role = document.getElementById('inbox-role-select').value;
+                const replyRes = await fetch(`/gmail/action?tool=gmail_reply_email&role=${role}`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ message_id: emailId, body: text })
+                });
+                const data = await replyRes.json();
+                if (data.status === "executed") {
+                  alert("Agent successfully replied to the email!");
+                  refreshInbox();
+                  refreshDashboardData();
+                } else if (data.status === "pending") {
+                  alert(`ACTION PAUSED by SentinelAI Guardrails!\n\nReason: Enqueued in HITL review queue. Code: hitl_external_email`);
+                  refreshDashboardData();
+                } else if (data.status === "blocked") {
+                  alert(`ACTION BLOCKED by SentinelAI Guardrails!\n\nReason: ${data.evaluation.reason}`);
+                  refreshDashboardData();
+                } else {
+                  alert("Error: " + (data.message || "Unknown error"));
+                }
+              } catch (err) {
+                alert("Error sending reply: " + err);
+              }
+            }
+          }
+        });
+      } catch (err) {
+        alert("Error executing reply instruction: " + err);
       }
     }
   </script>

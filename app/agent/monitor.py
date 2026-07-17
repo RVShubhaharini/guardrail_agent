@@ -3,9 +3,11 @@ import time
 import logging
 import json
 import re
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 from fastapi import FastAPI
 from app.config import settings
+from app.agent.phishing_detector import is_phishing_or_threat_email, analyze_phishing_risk
 
 logger = logging.getLogger(__name__)
 
@@ -31,14 +33,17 @@ def _monitor_loop(app: FastAPI):
     """Infinite background loop polling the inbox for new entries."""
     gmail_connector = app.state.gmail_connector
     
-    # 1. Warm up the cache with existing emails so we only process *new* arrivals
+    # 1. Scan and analyze all existing inbox emails on startup to catch existing threat emails
     try:
         startup_emails = gmail_connector.list_emails()
         for email in startup_emails:
-            processed_email_ids.add(email["id"])
-        logger.info(f"[Monitor] Initialized with {len(processed_email_ids)} existing startup emails.")
+            if email["id"] not in processed_email_ids:
+                logger.info(f"[Monitor Startup] Scanning inbox email ID={email['id']} from '{email.get('from')}'...")
+                _process_new_email(app, email)
+                processed_email_ids.add(email["id"])
+        logger.info(f"[Monitor] Initialized and processed {len(processed_email_ids)} startup emails.")
     except Exception as e:
-        logger.error(f"[Monitor] Error during initialization: {e}")
+        logger.error(f"[Monitor] Error during startup scan: {e}")
 
     # 2. Start polling
     while True:
@@ -56,6 +61,8 @@ def _monitor_loop(app: FastAPI):
                     processed_email_ids.add(email_id)
         except Exception as e:
             logger.error(f"[Monitor] Error in background monitoring loop: {e}")
+
+
 
 def _plan_action_for_email(email: dict) -> dict:
     """Uses LLM (Gemini or Groq) to plan an autonomous action for the email.
@@ -154,13 +161,13 @@ def _plan_action_for_email(email: dict) -> dict:
     body_lower = body.lower()
     from_lower = sender.lower()
     
-    # Use Case 1: Phishing Protection (Reset password / suspicious domains)
-    if "amaz0n" in from_lower or ("reset password" in sub_lower and "urgent" in sub_lower):
+    # Use Case 1: Phishing Protection (Reset password / suspicious domains / threat keywords)
+    if is_phishing_or_threat_email(email):
         return {
             "action_required": True,
             "tool": "gmail_delete_email",
             "params": {"message_id": email["id"]},
-            "reason": "Security Alert: Detected suspicious phishing domain (amaz0n) or urgent password reset request."
+            "reason": f"Security Alert: Threat detected from sender '{sender}' or email content."
         }
         
     # Use Case 8: Sensitive Data Leak Detection (e.g. passwords.xlsx attachment)
@@ -231,10 +238,111 @@ def _process_new_email(app: FastAPI, email: dict):
     """Processes a new email: Plans action -> Evaluates against Guardrails -> Executes if allowed."""
     evaluator = app.state.evaluator
     execution_gateway = app.state.execution_gateway
+    gmail_connector = app.state.gmail_connector
     
     agent_id = "autonomous-monitor-agent"
     
-    # 1. Plan action
+    # Skip processing if this is an outgoing sent email, reply thread, or already replied email
+    labels = email.get("labels", [])
+    subject_raw = email.get("subject", "")
+    sender_raw = email.get("from", "")
+    is_replied = "REPLIED" in labels or email.get("id") in getattr(gmail_connector, "replied_message_ids", set())
+    if "SENT" in labels or "REPLIED" in labels or is_replied or subject_raw.startswith("Re:") or "me@" in sender_raw:
+        logger.info(f"[Monitor] Skipping sent/replied email ID '{email.get('id')}' to prevent duplicate replies.")
+        return
+        
+    # Initialize guardian_alerts state if not exists
+    if not hasattr(app.state, "guardian_alerts"):
+        app.state.guardian_alerts = []
+        
+    subject = email.get("subject", "").lower()
+    body = email.get("body", "").lower()
+    sender = email.get("from", "").lower()
+    
+    # 1. Guardian Feature: Fraud/Phishing Auto-Delete & Notify
+    is_phishing = (
+        "amaz0n" in sender or 
+        "bank account" in body or 
+        "reset password" in body or 
+        "reset password" in subject or 
+        "urgent" in body or 
+        "verify account" in body or
+        "credentials" in body or
+        "password" in body
+    )
+    if is_phishing:
+        logger.info(f"[Guardian Agent] Fraudulent email detected from '{email['from']}'. Auto-deleting...")
+        gmail_connector.delete_email(email["id"])
+        
+        # Write official audit log entry so it populates Governance Audit Logs table
+        audit_store = getattr(app.state, "audit_store", None)
+        if audit_store:
+            audit_record = {
+                "timestamp": datetime.utcnow().isoformat(),
+                "event": "guardian_threat_quarantine",
+                "agent_id": "guardian-agent",
+                "tool": "gmail_delete_email",
+                "params": {"message_id": email["id"], "sender": email["from"], "subject": email.get("subject", "(No Subject)")},
+                "role": "system_guardian",
+                "status": "blocked",
+                "evaluation": {
+                    "status": "blocked",
+                    "risk_score": 100,
+                    "reason": f"🚨 Threat Interception: Phishing email from '{email['from']}' detected and automatically deleted into Trash.",
+                    "explanation": {
+                        "rule_triggered": "RULE_PHISHING_AUTO_QUARANTINE",
+                        "suggested_remediation": "Sender domain quarantined automatically by Guardian Agent."
+                    }
+                },
+                "result": {"status": "quarantined"}
+            }
+            audit_store.write(audit_record)
+        
+        # Save complete threat email content and log metadata into Quarantine Vault
+        quarantine_record = {
+            "id": email["id"],
+            "from": email.get("from", "Unknown"),
+            "to": email.get("to", "me"),
+            "subject": email.get("subject", "(No Subject)"),
+            "body": email.get("body", ""),
+            "timestamp": email.get("timestamp", datetime.utcnow().isoformat()),
+            "quarantined_at": datetime.utcnow().isoformat(),
+            "status": "QUARANTINED_AND_DELETED",
+            "threat_reason": "Suspicious phishing sender domain and credential harvest keywords",
+            "risk_score": 100,
+            "rule_triggered": "RULE_PHISHING_AUTO_QUARANTINE"
+        }
+        
+        if not hasattr(app.state, "quarantine_vault"):
+            app.state.quarantine_vault = []
+        app.state.quarantine_vault.insert(0, quarantine_record)
+        
+        app.state.guardian_alerts.append({
+            "id": email["id"],
+            "type": "fraud",
+            "title": "🚨 Fraudulent Phishing Email Quarantined",
+            "message": f"Suspicious phishing email from '{email['from']}' (Subject: '{email.get('subject', '(No Subject)')}') was automatically detected and moved to Trash.",
+            "email": email,
+            "status": "quarantined"
+        })
+        return
+        
+    # 2. Guardian Feature: Interactive Reply Prompt
+    # Check if the email contains a question or asks for reply
+    is_asking_for_reply = "?" in body or "?" in subject or "reply" in body or "let me know" in body
+    if is_asking_for_reply:
+        logger.info(f"[Guardian Agent] Reply request email detected from '{email['from']}'. Prompting user...")
+        app.state.guardian_alerts.append({
+            "id": email["id"],
+            "type": "reply_request",
+            "title": "💬 Reply Requested by Sender",
+            "message": f"Email from '{email['from']}' asks: '{email['subject']}'.",
+            "email": email,
+            "status": "pending_user_input"
+        })
+        return
+
+    # 3. Plan default actions for other cases
     plan = _plan_action_for_email(email)
     
     if not plan.get("action_required"):
@@ -271,6 +379,15 @@ def _process_new_email(app: FastAPI, email: dict):
                 role=tool_params["_role"]
             )
             logger.info(f"[Monitor Executor] Successfully executed action: {result}")
+            if tool_name == "gmail_delete_email":
+                app.state.guardian_alerts.append({
+                    "id": email["id"],
+                    "type": "fraud",
+                    "title": "🚨 Threat Email Deleted by Autonomous Agent",
+                    "message": f"Autonomous Agent detected phishing attempt from '{email.get('from', 'Unknown')}' and deleted it into Trash.",
+                    "email": email,
+                    "status": "quarantined"
+                })
         except Exception as e:
             logger.error(f"[Monitor Executor] Failed executing action: {e}")
     elif status == "pending":

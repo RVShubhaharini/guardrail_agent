@@ -48,6 +48,8 @@ app.state.rate_limiter = rate_limiter
 app.state.evaluator = evaluator
 app.state.gmail_connector = gmail_connector
 app.state.execution_gateway = execution_gateway
+app.state.guardian_alerts = []
+app.state.quarantine_vault = []
 
 # Include Routers
 from app.auth.routes import router as auth_router
@@ -105,6 +107,73 @@ def simulate_receive(
     }
     gmail_connector.mock_db.insert(0, new_email)
     return {"status": "success", "simulated_email": new_email}
+
+@app.get("/guardian/alerts")
+def get_guardian_alerts(request: Request):
+    """Returns active guardian security alerts and interactive reply requests."""
+    return getattr(request.app.state, "guardian_alerts", [])
+
+@app.get("/guardian/quarantine_vault")
+def get_quarantine_vault(request: Request):
+    """Returns stored logs and full email contents of all deleted/quarantined threat emails."""
+    gmail_connector = request.app.state.gmail_connector
+    return getattr(gmail_connector, "quarantine_vault", [])
+
+@app.post("/guardian/clear_alert/{alert_id}")
+def clear_guardian_alert(request: Request, alert_id: str):
+    """Dismisses a guardian security alert, marking it as acknowledged in state history."""
+    alerts = getattr(request.app.state, "guardian_alerts", [])
+    for a in alerts:
+        if a["id"] == alert_id:
+            a["dismissed"] = True
+    return {"status": "success"}
+
+@app.post("/guardian/reply")
+def submit_guardian_reply(
+    request: Request,
+    message_id: str = Query(...),
+    reply_body: str = Query(...)
+):
+    """Submits a user-guided reply to an email thread, running it through guardrails."""
+    evaluator = request.app.state.evaluator
+    execution_gateway = request.app.state.execution_gateway
+    alerts = getattr(request.app.state, "guardian_alerts", [])
+    
+    alert = next((a for a in alerts if a["id"] == message_id), None)
+    if not alert:
+        return {"status": "error", "message": "Alert not found or already processed."}
+        
+    tool_params = {
+        "message_id": message_id,
+        "body": reply_body,
+        "_role": "junior_dev"
+    }
+    
+    evaluation = evaluator.evaluate_action(
+        agent_id="autonomous-monitor-agent",
+        tool="gmail_reply_email",
+        params=tool_params
+    )
+    
+    status = evaluation["status"]
+    if status == "allowed":
+        try:
+            result = execution_gateway.execute(
+                agent_id="autonomous-monitor-agent",
+                tool_name="gmail_reply_email",
+                params=tool_params,
+                role="junior_dev"
+            )
+            # Remove from alerts
+            request.app.state.guardian_alerts = [a for a in alerts if a["id"] != message_id]
+            return {"status": "executed", "result": result, "evaluation": evaluation}
+        except Exception as e:
+            return {"status": "error", "message": f"Execution failed: {e}"}
+    elif status == "pending":
+        alert["status"] = "pending_hitl_approval"
+        return {"status": "pending", "evaluation": evaluation}
+    else:
+        return {"status": "blocked", "evaluation": evaluation}
 
 @app.get("/gmail/inbox")
 def list_inbox(request: Request, label: Optional[str] = Query(None, description="Optional label filter, e.g. INBOX, SENT, TRASH")):

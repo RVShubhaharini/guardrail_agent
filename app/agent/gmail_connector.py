@@ -15,6 +15,7 @@ try:
 except ImportError:
     pass
 
+import json
 import logging
 import threading
 from typing import List, Dict, Any, Optional
@@ -90,7 +91,51 @@ class GmailConnector:
             }
         ]
 
+        self.quarantine_vault: List[Dict[str, Any]] = self._load_quarantine_vault()
+        self.replied_message_ids: set = self._load_replied_message_ids()
         self._initialize_connector()
+
+    def _load_quarantine_vault(self) -> List[Dict[str, Any]]:
+        file_path = os.path.join("data", "quarantine_vault.json")
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        return json.loads(content)
+            except Exception as e:
+                logger.error(f"Error loading quarantine vault from file: {e}")
+        return []
+
+    def _save_quarantine_vault(self):
+        try:
+            os.makedirs("data", exist_ok=True)
+            file_path = os.path.join("data", "quarantine_vault.json")
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(self.quarantine_vault, f, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving quarantine vault to file: {e}")
+
+    def _load_replied_message_ids(self) -> set:
+        file_path = os.path.join("data", "replied_emails.json")
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read().strip()
+                    if content:
+                        return set(json.loads(content))
+            except Exception as e:
+                logger.error(f"Error loading replied emails file: {e}")
+        return set()
+
+    def _save_replied_message_ids(self):
+        try:
+            os.makedirs("data", exist_ok=True)
+            file_path = os.path.join("data", "replied_emails.json")
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(list(self.replied_message_ids), f, indent=2)
+        except Exception as e:
+            logger.error(f"Error saving replied emails file: {e}")
 
     def _initialize_connector(self):
         """Discovers and establishes connection to the Google API if configured."""
@@ -178,13 +223,17 @@ class GmailConnector:
                     sender = next((h["value"] for h in headers if h["name"].lower() == "from"), "Unknown")
                     to = next((h["value"] for h in headers if h["name"].lower() == "to"), "me")
                     
+                    labels = detail.get("labelIds", [])
+                    if detail["id"] in getattr(self, "replied_message_ids", set()) and "REPLIED" not in labels:
+                        labels.append("REPLIED")
+                        
                     output.append({
                         "id": detail["id"],
                         "from": sender,
                         "to": to,
                         "subject": subject,
                         "body": detail.get("snippet", ""),
-                        "labels": detail.get("labelIds", []),
+                        "labels": labels,
                         "timestamp": datetime.utcnow().isoformat(), # approximate
                         "attachments": []
                     })
@@ -249,7 +298,29 @@ class GmailConnector:
         if self.is_live and not message_id.startswith("msg_"):
             try:
                 detail = self.service.users().messages().get(userId="me", id=message_id).execute()
-                return {"id": message_id, "snippet": detail.get("snippet", ""), "labels": detail.get("labelIds", [])}
+                headers = detail.get("payload", {}).get("headers", [])
+                subject = next((h["value"] for h in headers if h["name"].lower() == "subject"), "(No Subject)")
+                sender = next((h["value"] for h in headers if h["name"].lower() == "from"), "Unknown")
+                to = next((h["value"] for h in headers if h["name"].lower() == "to"), "me")
+                
+                # Check for attachments
+                attachments = []
+                parts = detail.get("payload", {}).get("parts", [])
+                for part in parts:
+                    filename = part.get("filename")
+                    if filename:
+                        attachments.append({"filename": filename, "content_type": part.get("mimeType")})
+                        
+                return {
+                    "id": message_id,
+                    "from": sender,
+                    "to": to,
+                    "subject": subject,
+                    "body": detail.get("snippet", ""),
+                    "labels": detail.get("labelIds", []),
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "attachments": attachments
+                }
             except Exception as e:
                 logger.error(f"Live Gmail read failed: {e}.")
 
@@ -316,7 +387,30 @@ class GmailConnector:
         return results
 
     def delete_email(self, message_id: str) -> bool:
-        """Delete an email (moves to TRASH)."""
+        """Delete an email (moves to TRASH and saves into Quarantine Vault)."""
+        # Save full email content into Quarantine Vault before deleting
+        try:
+            email_info = self.read_email(message_id)
+            if email_info and not any(q["id"] == message_id for q in getattr(self, "quarantine_vault", [])):
+                quarantine_record = {
+                    "id": message_id,
+                    "from": email_info.get("from", "Unknown"),
+                    "to": email_info.get("to", "me"),
+                    "subject": email_info.get("subject", "(No Subject)"),
+                    "body": email_info.get("body", ""),
+                    "timestamp": email_info.get("timestamp", datetime.utcnow().isoformat()),
+                    "quarantined_at": datetime.utcnow().isoformat(),
+                    "status": "QUARANTINED_AND_DELETED",
+                    "threat_reason": "Email deleted and moved to TRASH vault",
+                    "risk_score": 100
+                }
+                if not hasattr(self, "quarantine_vault"):
+                    self.quarantine_vault = []
+                self.quarantine_vault.insert(0, quarantine_record)
+                self._save_quarantine_vault()
+        except Exception as ex:
+            logger.error(f"Error preserving email to quarantine vault: {ex}")
+
         if self.is_live and not message_id.startswith("msg_"):
             try:
                 self.service.users().messages().trash(userId="me", id=message_id).execute()
@@ -378,8 +472,22 @@ class GmailConnector:
         if not msg:
             raise ValueError(f"Message ID '{message_id}' not found.")
             
-        subject = f"Re: {msg['subject']}"
-        to = msg["from"]
+        subject = f"Re: {msg.get('subject', 'No Subject')}"
+        to = msg.get("from", "unknown@acme-corp.com")
+        
+        # Mark the original message with REPLIED label persistently
+        if not hasattr(self, "replied_message_ids"):
+            self.replied_message_ids = set()
+        self.replied_message_ids.add(message_id)
+        self._save_replied_message_ids()
+        
+        for item in self.mock_db:
+            if item["id"] == message_id:
+                if "labels" not in item:
+                    item["labels"] = []
+                if "REPLIED" not in item["labels"]:
+                    item["labels"].append("REPLIED")
+                    
         return self.send_email(to=to, subject=subject, body=body)
 
     def forward_email(self, message_id: str, to: str) -> Dict[str, Any]:

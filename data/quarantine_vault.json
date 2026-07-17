@@ -1,0 +1,38 @@
+[
+  {
+    "id": "19f6f9f12b71e1b3",
+    "from": "Shubha Harini RV <shubhaharinirv@gmail.com>",
+    "to": "\"s46127935@gmail.com\" <s46127935@gmail.com>",
+    "subject": "",
+    "body": "Hey Shubha are you free tonight at 8 pm to have the interview",
+    "timestamp": "2026-07-17T12:24:03.171815",
+    "quarantined_at": "2026-07-17T12:24:03.171815",
+    "status": "QUARANTINED_AND_DELETED",
+    "threat_reason": "Email deleted and moved to TRASH vault",
+    "risk_score": 100
+  },
+  {
+    "id": "19f6ff1a8bfa9634",
+    "from": "Shubha Harini RV <shubhaharinirv@gmail.com>",
+    "to": "\"s46127935@gmail.com\" <s46127935@gmail.com>",
+    "subject": "",
+    "body": "Reset your password",
+    "timestamp": "2026-07-17T11:59:04.045081",
+    "quarantined_at": "2026-07-17T11:59:04.045081",
+    "status": "QUARANTINED_AND_DELETED",
+    "threat_reason": "Email deleted and moved to TRASH vault",
+    "risk_score": 100
+  },
+  {
+    "id": "19f6ff11605a4318",
+    "from": "Shubha Harini RV <shubhaharinirv61@gmail.com>",
+    "to": "s46127935@gmail.com",
+    "subject": "",
+    "body": "Reset your password",
+    "timestamp": "2026-07-17T11:58:44.063243",
+    "quarantined_at": "2026-07-17T11:58:44.063243",
+    "status": "QUARANTINED_AND_DELETED",
+    "threat_reason": "Email deleted and moved to TRASH vault",
+    "risk_score": 100
+  }
+]
