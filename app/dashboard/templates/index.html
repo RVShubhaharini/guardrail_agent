@@ -793,6 +793,17 @@
             </div>
           </div>
 
+          <!-- Live Policy Interceptor Inspector -->
+          <div class="card-panel" id="live-inspector-card" style="display: none; border-color: rgba(99, 102, 241, 0.4); margin-bottom: 0px;">
+            <div class="card-header" style="background: rgba(99, 102, 241, 0.05); display: flex; justify-content: space-between; align-items: center;">
+              <h2 class="card-title" style="color: #818CF8;">🛡️ Live Policy Interceptor Inspector</h2>
+              <span class="badge" id="inspector-badge">ALLOWED</span>
+            </div>
+            <div class="card-content" id="inspector-content" style="font-size: 12px; display: flex; flex-direction: column; gap: 12px;">
+              <!-- Populated dynamically -->
+            </div>
+          </div>
+
           <!-- Recent Decisions Feed -->
           <div class="card-panel">
             <div class="card-header">
@@ -1206,6 +1217,7 @@
         const tbody = document.getElementById('recent-feed-body');
         if (audits.length === 0) {
           tbody.innerHTML = `<tr><td colspan="4" style="color: var(--text-muted); text-align: center;">Waiting for action dispatches...</td></tr>`;
+          renderInspector(null);
         } else {
           tbody.innerHTML = audits.map(a => {
             let badgeClass = "badge-allowed";
@@ -1221,11 +1233,104 @@
               </tr>
             `;
           }).join('');
+          renderInspector(audits[0]);
         }
 
       } catch (err) {
         console.error("Dashboard refresh error: ", err);
       }
+    }
+
+    function renderInspector(log) {
+      const card = document.getElementById('live-inspector-card');
+      const content = document.getElementById('inspector-content');
+      const badge = document.getElementById('inspector-badge');
+
+      if (!log) {
+        card.style.display = 'none';
+        return;
+      }
+
+      card.style.display = 'flex';
+
+      // Badge class
+      let badgeClass = "badge-allowed";
+      if (log.action === "block" || log.action === "hitl_rejected") badgeClass = "badge-blocked";
+      if (log.action === "require_hitl" || log.action === "pending") badgeClass = "badge-pending";
+      badge.className = `badge ${badgeClass}`;
+      badge.innerText = log.action.toUpperCase();
+
+      // Matched Rules
+      const explanation = log.explanation || {};
+      const matchedRules = explanation.matched_rules || [];
+      const rulesHtml = matchedRules.length > 0
+        ? matchedRules.map(r => `<li><strong>${r.id}</strong>: ${r.description} (${r.action.toUpperCase()}, Risk: ${r.risk_score})</li>`).join('')
+        : "<li>No explicit rules matched. Default allow rules applied.</li>";
+
+      // Timeline steps
+      const timeline = log.timeline || [];
+      const timelineHtml = timeline.map((step, index) => {
+        let nodeClass = "active";
+        if (index === timeline.length - 1) {
+          if (log.action === "block") nodeClass = "blocked";
+          else if (log.action === "require_hitl" || log.action === "pending") nodeClass = "pending";
+          else nodeClass = "allowed";
+        }
+        return `
+          <div class="timeline-node ${nodeClass}" style="padding-left: 14px; margin-bottom: 6px; position: relative;">
+            <div class="timeline-step" style="font-size: 11px; font-weight: 600;">${step.step}</div>
+            <div class="timeline-details" style="font-size: 10px; color: var(--text-secondary);">${step.details}</div>
+          </div>
+        `;
+      }).join('');
+
+      // Extract params to show (excluding internal fields starting with '_')
+      const cleanParams = {};
+      if (log.params) {
+        for (const [k, v] of Object.entries(log.params)) {
+          if (!k.startsWith('_')) {
+            cleanParams[k] = v;
+          }
+        }
+      }
+
+      content.innerHTML = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 10px;">
+          <div>
+            <div style="font-size: 11px; color: var(--text-secondary); font-weight: 700; text-transform: uppercase;">Request Info</div>
+            <div style="margin-top: 4px;"><strong>Tool:</strong> <code>${log.tool}</code></div>
+            <div><strong>Agent:</strong> <code>${log.agent_id}</code></div>
+            <div><strong>Policy:</strong> <code>${log.policy_version || 'v1'}</code></div>
+          </div>
+          <div>
+            <div style="font-size: 11px; color: var(--text-secondary); font-weight: 700; text-transform: uppercase;">Risk Score</div>
+            <div class="risk-meter-container" style="margin-top: 4px;">
+              <div class="risk-bar" style="height: 6px; flex-grow: 1;">
+                <div class="risk-fill" style="width: ${log.risk_score}%; background: ${log.action === 'block' ? 'var(--color-blocked)' : log.action === 'require_hitl' ? 'var(--color-pending)' : 'var(--color-allowed)'};"></div>
+              </div>
+              <strong style="color: ${log.action === 'block' ? 'var(--color-blocked)' : log.action === 'require_hitl' ? 'var(--color-pending)' : 'var(--color-allowed)'};">${log.risk_score}/100</strong>
+            </div>
+            <div style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">${log.reason || ''}</div>
+          </div>
+        </div>
+
+        <div>
+          <div style="font-size: 11px; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Parameters Checked</div>
+          <pre style="margin: 0; padding: 6px 10px; font-size: 11px;">${JSON.stringify(cleanParams, null, 2)}</pre>
+        </div>
+
+        <div>
+          <div style="font-size: 11px; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; margin-bottom: 6px;">Policy Evaluation Steps</div>
+          <div class="timeline-container" style="gap: 8px; border-left: 1px solid rgba(255, 255, 255, 0.05); padding-left: 8px; margin-left: 4px;">
+            ${timelineHtml}
+          </div>
+        </div>
+
+        <div style="border-top: 1px dashed rgba(255,255,255,0.06); padding-top: 8px;">
+          <div style="font-size: 11px; color: var(--text-secondary); font-weight: 700; text-transform: uppercase; margin-bottom: 4px;">Remediation Suggestion</div>
+          <div style="color: var(--color-pending); font-weight: 500;">${explanation.suggested_remediation || 'None'}</div>
+        </div>
+      `;
     }
 
     async function resolveHITL(id, decision) {
