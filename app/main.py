@@ -77,6 +77,35 @@ def health():
         "monitor_active": settings.enable_monitor
     }
 
+@app.post("/gmail/simulate_receive")
+def simulate_receive(
+    request: Request,
+    sender: str = Query("support@amaz0n-security.com", description="Sender email address"),
+    subject: str = Query("URGENT: Reset Password", description="Email subject line"),
+    body: str = Query("Please click here to reset your password.", description="Email text body"),
+    attachment_filename: Optional[str] = Query(None, description="Optional filename for simulated attachment")
+):
+    """Simulates receiving a new email in Mock Mode to trigger the background monitor."""
+    from datetime import datetime
+    gmail_connector = request.app.state.gmail_connector
+    new_id = f"msg_{len(gmail_connector.mock_db) + 1:03d}"
+    attachments = []
+    if attachment_filename:
+        attachments.append({"filename": attachment_filename, "content_type": "application/octet-stream"})
+        
+    new_email = {
+        "id": new_id,
+        "from": sender,
+        "to": "john@acme-corp.com",
+        "subject": subject,
+        "body": body,
+        "labels": ["INBOX"],
+        "timestamp": datetime.utcnow().isoformat(),
+        "attachments": attachments
+    }
+    gmail_connector.mock_db.insert(0, new_email)
+    return {"status": "success", "simulated_email": new_email}
+
 @app.get("/gmail/inbox")
 def list_inbox(request: Request, label: Optional[str] = Query(None, description="Optional label filter, e.g. INBOX, SENT, TRASH")):
     """Exposes current email database content to support dashboard visualizations."""

@@ -775,6 +775,15 @@
             </div>
           </div>
           <div class="card-content" style="max-height: 520px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;">
+            <!-- Simulator Quick Actions -->
+            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);">
+              <span style="font-size: 11px; font-weight: 700; color: var(--text-secondary); display: block; width: 100%; margin-bottom: 6px;">📥 SIMULATE INCOMING EMAIL EVENT:</span>
+              <button class="btn-action" style="background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); color: #EF4444;" onclick="simulateIncomingMail('phishing')">🚨 Phishing Attack</button>
+              <button class="btn-action" style="background: rgba(245, 158, 11, 0.1); border-color: rgba(245, 158, 11, 0.2); color: #F59E0B;" onclick="simulateIncomingMail('payroll')">💼 Payroll Audit</button>
+              <button class="btn-action" style="background: rgba(16, 185, 129, 0.1); border-color: rgba(16, 185, 129, 0.2); color: #10B981;" onclick="simulateIncomingMail('ceo')">👑 CEO VIP</button>
+              <button class="btn-action" style="background: rgba(56, 189, 248, 0.1); border-color: rgba(56, 189, 248, 0.2); color: #38BDF8;" onclick="simulateIncomingMail('expense')">💳 Expense Claim</button>
+            </div>
+
             <div class="inbox-list" id="inbox-list-container">
               <!-- Dynamically populated inbox -->
               <div style="text-align: center; color: var(--text-muted); padding: 40px;">Loading simulated mail inbox...</div>
@@ -1753,6 +1762,31 @@
         }
       } else {
         window.location.href = '/auth/login';
+      }
+    }
+
+    async function simulateIncomingMail(type) {
+      let url = '/gmail/simulate_receive?';
+      if (type === 'phishing') {
+        url += 'sender=support@amaz0n-security.com&subject=URGENT:+Reset+Password&body=Suspicious+security+reset+instructions.';
+      } else if (type === 'payroll') {
+        url += 'sender=colleague@acme-corp.com&subject=Q3+Roadmap+Review&body=Please+find+the+salary+report+attached.&attachment_filename=salary_2026.xlsx';
+      } else if (type === 'ceo') {
+        url += 'sender=ceo@acme-corp.com&subject=Strategy+Alignment&body=Hello,+let+us+align+on+key+business+direction.';
+      } else if (type === 'expense') {
+        url += 'sender=vendor-uber@external.com&subject=Uber+Ride+Invoice&body=Your+Uber+ride+expense+invoice+details:+UberRide+amount+is+12500+rupees.';
+      }
+
+      try {
+        const res = await fetch(url, { method: 'POST' });
+        if (res.ok) {
+          refreshInbox();
+          refreshDashboardData();
+        } else {
+          alert("Simulation failed.");
+        }
+      } catch (err) {
+        alert("Error: " + err);
       }
     }
   </script>
