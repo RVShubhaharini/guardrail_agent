@@ -1,0 +1,36 @@
+# Version control
+.git
+.gitignore
+
+# Python bytecode & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+env/
+
+# Pytest & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Environment & Secrets
+.env
+*.pem
+
+# IDE & Editor files
+.idea/
+.vscode/
+*.swp
+
+# Docker & Deployment artifacts
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# OS & Temporary files
+.DS_Store
+Thumbs.db
+*.log
