@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: sentinelai-guardrail
+    runtime: docker
+    dockerfilePath: Dockerfile
+    plan: free
+    region: oregon
+    envVars:
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ACTIVE_POLICY_VERSION
+        value: "v3"
+      - key: DRY_RUN
+        value: "false"
+      - key: USE_DYNAMODB
+        value: "false"
+      - key: ENABLE_MONITOR
+        value: "false"
+      - key: AWS_DEFAULT_REGION
+        value: "us-east-1"
