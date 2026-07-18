@@ -39,6 +39,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Middleware to support HEAD requests (used by UptimeRobot & cloud health checkers)
+@app.middleware("http")
+async def handle_head_requests(request: Request, call_next):
+    if request.method == "HEAD":
+        request.scope["method"] = "GET"
+        response = await call_next(request)
+        return response
+    return await call_next(request)
+
 # Instantiate Core Singletons
 audit_store = AuditStore()
 hitl_queue = HitlQueue(audit_store)
@@ -79,7 +88,7 @@ def on_startup():
     from app.agent.monitor import start_inbox_monitor
     start_inbox_monitor(app)
 
-@app.get("/health")
+@app.api_route("/health", methods=["GET", "HEAD"])
 def health():
     """Service health state check."""
     return {
