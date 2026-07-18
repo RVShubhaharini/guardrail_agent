@@ -196,11 +196,8 @@ chroma_db/
 chromadb/
 embeddings/
 
-###############################################################################
-# Model Files
-###############################################################################
-
-models/
+# Model Files (ML/LLM weights)
+!app/models/
 checkpoints/
 weights/
 
