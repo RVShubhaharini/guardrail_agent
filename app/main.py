@@ -21,11 +21,22 @@ from app.utils.logging import setup_logging
 # Configure logging
 setup_logging()
 
+from fastapi.middleware.cors import CORSMiddleware
+
 # Setup FastAPI App
 app = FastAPI(
     title="SentinelAI",
     description="SentinelAI Enterprise AI Runtime Governance Platform",
     version="1.0.0"
+)
+
+# Enable CORS for cloud deployment & frontend clients
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Instantiate Core Singletons

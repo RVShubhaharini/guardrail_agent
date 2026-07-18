@@ -2,6 +2,9 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Ensure Python root path is explicitly set to /app for module imports
+ENV PYTHONPATH=/app
+
 # Install system dependencies if any are needed
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
