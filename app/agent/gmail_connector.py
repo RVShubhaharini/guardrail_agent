@@ -144,8 +144,18 @@ class GmailConnector:
             return
 
         creds = None
-        # token.json stores the user's access and refresh tokens
-        if os.path.exists('token.json'):
+        # Check if token JSON is provided via environment variable (ideal for Render/AWS)
+        token_env = os.environ.get("GMAIL_TOKEN_JSON") or os.environ.get("GOOGLE_TOKEN_JSON")
+        if token_env:
+            try:
+                token_data = json.loads(token_env)
+                creds = Credentials.from_authorized_user_info(token_data, SCOPES)
+                logger.info("[Gmail] Credentials loaded successfully from GMAIL_TOKEN_JSON environment variable.")
+            except Exception as e:
+                logger.error(f"Error loading credentials from GMAIL_TOKEN_JSON env var: {e}")
+
+        # Fall back to local token.json file
+        if not creds and os.path.exists('token.json'):
             try:
                 creds = Credentials.from_authorized_user_file('token.json', SCOPES)
             except Exception as e:
